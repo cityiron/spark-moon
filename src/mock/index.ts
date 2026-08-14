@@ -160,12 +160,12 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
     match: /GET\s+\/venue\/\d+\/courts$/,
     handler: () => ({
       code: 0, message: 'ok', data: [
-        { id: 101, name: '1 号场', type: 'badminton', indoor: true, status: 1, sort: 1 },
-        { id: 102, name: '2 号场', type: 'badminton', indoor: true, status: 1, sort: 2 },
-        { id: 103, name: '3 号场', type: 'badminton', indoor: true, status: 1, sort: 3 },
-        { id: 104, name: '4 号场', type: 'badminton', indoor: false, status: 1, sort: 4 },
-        { id: 105, name: '5 号场', type: 'badminton', indoor: false, status: 0, sort: 5 },
-        { id: 106, name: '6 号场', type: 'badminton', indoor: true, status: 1, sort: 6 },
+        { id: 101, name: '1 号场', type: 'badminton', category: 'normal', indoor: true, status: 1, sort: 1 },
+        { id: 102, name: '2 号场', type: 'badminton', category: 'normal', indoor: true, status: 1, sort: 2 },
+        { id: 103, name: '3 号场', type: 'badminton', category: 'normal', indoor: true, status: 1, sort: 3 },
+        { id: 104, name: '4 号场', type: 'badminton', category: 'vip', indoor: false, status: 1, sort: 4 },
+        { id: 105, name: '5 号场', type: 'badminton', category: 'vip', indoor: false, status: 0, sort: 5 },
+        { id: 106, name: '6 号场', type: 'badminton', category: 'normal', indoor: true, status: 1, sort: 6 },
       ],
     }),
   },
@@ -173,21 +173,21 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
   { match: /POST\s+\/venue\/\d+\/court$/, handler: () => ({ code: 0, message: 'ok', data: { id: Date.now() } }) },
   { match: /PUT\s+\/venue\/\d+\/court\/\d+$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
   { match: /DELETE\s+\/venue\/\d+\/court\/\d+$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
-  // 时段价格（价格组 + 优先级，匹配后端 /court/{id}/price-groups）
+  // 时段价格（价格组 + 优先级 + 适用场地范围，匹配后端 /venue/{id}/price-groups）
   {
-    match: /GET\s+\/court\/\d+\/price-groups$/,
+    match: /GET\s+\/venue\/\d+\/price-groups$/,
     handler: () => ({
       code: 0, message: 'ok', data: [
-        { id: 1, courtId: 101, name: '默认价', matchType: 'default', priority: 0, status: 1,
+        { id: 1, venueId: 1, courtScope: 'all', name: '默认价', matchType: 'default', priority: 0, status: 1,
           rules: [{ id: 1, startTime: '09:00', endTime: '22:00', priceType: 'hourly', price: 5000, minDuration: 60 }] },
-        { id: 2, courtId: 101, name: '工作日晚间高峰', matchType: 'weekday', daysOfWeek: '1,2,3,4,5', priority: 5, status: 1,
+        { id: 2, venueId: 1, courtScope: 'normal', name: '工作日普通价', matchType: 'weekday', daysOfWeek: '1,2,3,4,5', priority: 5, status: 1,
           rules: [{ id: 2, startTime: '18:00', endTime: '22:00', priceType: 'range', price: 18000 }] },
-        { id: 3, courtId: 101, name: '周末价', matchType: 'weekend', daysOfWeek: '6,7', priority: 5, status: 1,
-          rules: [{ id: 3, startTime: '09:00', endTime: '22:00', priceType: 'hourly', price: 8000, minDuration: 60 }] },
+        { id: 3, venueId: 1, courtScope: 'vip', name: 'VIP周末价', matchType: 'weekend', daysOfWeek: '6,7', priority: 5, status: 1,
+          rules: [{ id: 3, startTime: '09:00', endTime: '22:00', priceType: 'hourly', price: 12000, minDuration: 60 }] },
       ],
     }),
   },
-  { match: /PUT\s+\/court\/\d+\/price-groups$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
+  { match: /PUT\s+\/venue\/\d+\/price-groups$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
   // 会员列表
   {
     match: /GET\s+\/member\/list$/,

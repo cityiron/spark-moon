@@ -86,18 +86,18 @@ export function deleteCourt(venueId: number, courtId: number) {
   })
 }
 
-/** 场地价格分组配置（按 priority 降序返回） */
-export function getCourtPriceGroups(courtId: number) {
+/** 球馆价格分组配置（按 priority 降序返回） */
+export function getVenuePriceGroups(venueId: number) {
   return request<PriceGroup[]>({
-    url: `/court/${courtId}/price-groups`,
+    url: `/venue/${venueId}/price-groups`,
     method: 'get',
   })
 }
 
-/** 保存场地价格分组（全量覆盖） */
-export function saveCourtPriceGroups(courtId: number, data: PriceGroup[]) {
+/** 保存球馆价格分组（全量覆盖） */
+export function saveVenuePriceGroups(venueId: number, data: PriceGroup[]) {
   return request<void>({
-    url: `/court/${courtId}/price-groups`,
+    url: `/venue/${venueId}/price-groups`,
     method: 'put',
     data,
   })

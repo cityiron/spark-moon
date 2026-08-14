@@ -64,6 +64,9 @@ export interface Venue {
 /** 场地类型 */
 export type CourtType = 'badminton' | 'tennis' | 'basketball' | 'table_tennis'
 
+/** 场地类别 */
+export type CourtCategory = 'normal' | 'vip'
+
 /** 场地 */
 export interface Court {
   id: number
@@ -71,6 +74,8 @@ export interface Court {
   name: string
   /** 场地类型 */
   type: CourtType
+  /** 场地类别: normal 普通 / vip 贵宾 */
+  category?: CourtCategory
   /** 是否室内 */
   indoor: boolean
   /** 状态: 1 开放 0 关闭 */
@@ -102,10 +107,15 @@ export interface PriceRule {
   minDuration?: number
 }
 
-/** 场地价格组: 默认价/工作日/周末/节假日/自定义, 按 priority 从高到低匹配 */
+/** 价格组适用场地范围 */
+export type CourtScope = 'all' | 'normal' | 'vip'
+
+/** 球馆价格组: 默认价/工作日/周末/节假日/自定义, 按 priority 从高到低匹配 */
 export interface PriceGroup {
   id?: number
-  courtId?: number
+  venueId?: number
+  /** 适用场地范围: all 全部 / normal 普通 / vip 贵宾 */
+  courtScope?: CourtScope
   /** 组名, 如 默认价/工作日/周末/国庆 */
   name: string
   /** 匹配类型 */

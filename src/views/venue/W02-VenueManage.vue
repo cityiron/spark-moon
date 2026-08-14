@@ -138,6 +138,11 @@
                 <template v-if="column.dataIndex === 'type'">
                   {{ courtTypeLabel(record.type) }}
                 </template>
+                <template v-else-if="column.dataIndex === 'category'">
+                  <a-tag :color="record.category === 'vip' ? 'gold' : 'default'">
+                    {{ record.category === 'vip' ? 'VIP' : '普通' }}
+                  </a-tag>
+                </template>
                 <template v-else-if="column.dataIndex === 'indoor'">
                   <a-tag :color="record.indoor ? 'orange' : 'cyan'">
                     {{ record.indoor ? '室内' : '室外' }}
@@ -170,7 +175,7 @@
               <div class="card-title">时段价格配置</div>
               <a-space>
                 <span class="hint-text">价格组按优先级从高到低匹配，当天命中最高优先级的组生效</span>
-                <a-button type="primary" :disabled="courtList.length === 0" @click="openGroupCreate">
+                <a-button type="primary" @click="openGroupCreate">
                   <plus-outlined />
                   新增价格组
                 </a-button>
@@ -178,10 +183,10 @@
             </div>
 
             <a-alert
-              v-if="courtList.length === 0"
+              v-if="!currentVenueId"
               type="warning"
               show-icon
-              message="请先在“场地配置”中添加场地"
+              message="请先选择球馆"
               style="margin-bottom: 16px"
             />
 
@@ -200,6 +205,11 @@
                 </template>
                 <template v-else-if="column.dataIndex === 'matchType'">
                   <a-tag :color="matchTypeColor(record.matchType)">{{ matchTypeLabel(record.matchType) }}</a-tag>
+                </template>
+                <template v-else-if="column.dataIndex === 'courtScope'">
+                  <a-tag :color="record.courtScope === 'vip' ? 'gold' : record.courtScope === 'normal' ? 'blue' : 'default'">
+                    {{ courtScopeLabel(record.courtScope) }}
+                  </a-tag>
                 </template>
                 <template v-else-if="column.dataIndex === 'scope'">
                   {{ scopeText(record) }}
@@ -232,7 +242,7 @@
             </a-table>
 
             <div class="form-actions">
-              <a-button type="primary" :loading="saving" :disabled="courtList.length === 0" @click="savePrices">
+              <a-button type="primary" :loading="saving" :disabled="!currentVenueId" @click="savePrices">
                 保存价格配置
               </a-button>
             </div>
@@ -310,6 +320,12 @@
         <a-form-item label="运动类型" name="type">
           <a-select v-model:value="courtForm.type" :options="courtTypeOptions" />
         </a-form-item>
+        <a-form-item label="场地类别" name="category">
+          <a-radio-group v-model:value="courtForm.category">
+            <a-radio value="normal">普通</a-radio>
+            <a-radio value="vip">VIP</a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-form-item label="室内/室外" name="indoor">
           <a-radio-group v-model:value="courtForm.indoor">
             <a-radio :value="true">室内</a-radio>
@@ -356,6 +372,19 @@
                 style="width: 100%"
                 @change="onMatchTypeChange"
               />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="适用场地范围" name="courtScope">
+              <a-radio-group v-model:value="groupForm.courtScope">
+                <a-radio-button value="all">全部场地</a-radio-button>
+                <a-radio-button value="normal">仅普通</a-radio-button>
+                <a-radio-button value="vip">仅VIP</a-radio-button>
+              </a-radio-group>
+              <div class="hint-text">该价格组仅对所选范围的场地生效；普通/VIP 场地可配不同价格</div>
             </a-form-item>
           </a-col>
         </a-row>
@@ -489,8 +518,8 @@ import {
   createCourt,
   updateCourt,
   deleteCourt,
-  getCourtPriceGroups,
-  saveCourtPriceGroups,
+  getVenuePriceGroups,
+  saveVenuePriceGroups,
 } from '@/api/venue'
 import type {
   Venue,
@@ -500,6 +529,7 @@ import type {
   PriceGroup,
   PriceGroupMatchType,
   PriceRule,
+  CourtScope,
 } from '@/types/models'
 
 // ===== 映射 =====
@@ -562,6 +592,15 @@ const priceTypeOptions = [
 ]
 function priceTypeLabel(p: PriceType): string {
   return priceTypeOptions.find((o) => o.value === p)?.label || p
+}
+
+const courtScopeOptions = [
+  { label: '全部场地', value: 'all' },
+  { label: '仅普通', value: 'normal' },
+  { label: '仅VIP', value: 'vip' },
+]
+function courtScopeLabel(s?: string): string {
+  return courtScopeOptions.find((o) => o.value === s)?.label || '全部场地'
 }
 
 // ===== 球馆选择器 =====
@@ -693,6 +732,7 @@ const courtColumns: TableColumnsType = [
   { title: '排序', dataIndex: 'sort', width: 80, align: 'center' },
   { title: '场地编号', dataIndex: 'name', width: 140 },
   { title: '运动类型', dataIndex: 'type', width: 120 },
+  { title: '场地类别', dataIndex: 'category', width: 100 },
   { title: '室内/室外', dataIndex: 'indoor', width: 100 },
   { title: '状态', dataIndex: 'status', width: 120 },
   { title: '操作', dataIndex: 'action', width: 140 },
@@ -719,6 +759,7 @@ const editingCourtId = ref<number>(0)
 const courtForm = reactive<Partial<Court>>({
   name: '',
   type: 'badminton',
+  category: 'normal',
   indoor: true,
   status: 1,
   sort: 0,
@@ -733,6 +774,7 @@ function openCourtCreate() {
   Object.assign(courtForm, {
     name: '',
     type: 'badminton',
+    category: 'normal',
     indoor: true,
     status: 1,
     sort: courtList.value.length + 1,
@@ -746,6 +788,7 @@ function openCourtEdit(court: Court) {
   Object.assign(courtForm, {
     name: court.name,
     type: court.type,
+    category: court.category || 'normal',
     indoor: court.indoor,
     status: court.status,
     sort: court.sort,
@@ -801,6 +844,7 @@ const priceLoading = ref(false)
 const groupColumns: TableColumnsType = [
   { title: '优先级', dataIndex: 'priority', width: 110 },
   { title: '组名称', dataIndex: 'name', width: 140 },
+  { title: '适用场地', dataIndex: 'courtScope', width: 100 },
   { title: '适用日期', dataIndex: 'matchType', width: 120 },
   { title: '适用范围', dataIndex: 'scope', width: 200 },
   { title: '时段规则', dataIndex: 'rules' },
@@ -835,15 +879,14 @@ function toGroupRow(g: PriceGroup, index: number): PriceGroupRow {
 }
 
 async function loadPriceConfigs() {
-  // 价格按场地配置：当前实现只对第一个场地
-  if (courtList.value.length === 0) {
+  // 价格按球馆配置
+  if (!currentVenueId.value) {
     groupList.value = []
     return
   }
-  const courtId = courtList.value[0].id
   priceLoading.value = true
   try {
-    const groups = await getCourtPriceGroups(courtId)
+    const groups = await getVenuePriceGroups(currentVenueId.value)
     groupList.value = (groups || []).map(toGroupRow)
   } catch {
     groupList.value = []
@@ -860,6 +903,7 @@ const editingGroupKey = ref<number | null>(null)
 const groupForm = reactive<{
   name: string
   matchType: PriceGroupMatchType
+  courtScope: CourtScope
   daysArr: number[]
   dateRange: [string, string] | []
   priority: number
@@ -867,6 +911,7 @@ const groupForm = reactive<{
 }>({
   name: '',
   matchType: 'default',
+  courtScope: 'all',
   daysArr: [],
   dateRange: [],
   priority: 0,
@@ -943,6 +988,7 @@ function openGroupCreate() {
   Object.assign(groupForm, {
     name: '',
     matchType: 'default',
+    courtScope: 'all',
     daysArr: [],
     dateRange: [],
     priority: 0,
@@ -962,6 +1008,7 @@ function openGroupEdit(row: PriceGroupRow) {
   Object.assign(groupForm, {
     name: row.name,
     matchType: row.matchType,
+    courtScope: row.courtScope || 'all',
     daysArr,
     dateRange,
     priority: row.priority,
@@ -1046,6 +1093,7 @@ function submitGroup() {
   const payload: PriceGroup = {
     name: groupForm.name,
     matchType: groupForm.matchType,
+    courtScope: groupForm.courtScope,
     priority: groupForm.priority,
     status: groupForm.status,
     rules: ruleList.value.map(({ key, ...rest }) => ({ ...rest })),
@@ -1070,23 +1118,22 @@ function submitGroup() {
 }
 
 async function savePrices() {
-  if (courtList.value.length === 0) {
-    message.warning('请先添加场地')
+  if (!currentVenueId.value) {
+    message.warning('请先选择球馆')
+    return
+  }
+  // 校验：需有兜底的默认价组
+  const hasDefault = groupList.value.some((g) => g.matchType === 'default')
+  if (!hasDefault) {
+    message.warning('请至少配置一个“全部日期（默认价）”价格组作为兜底')
     return
   }
   saving.value = true
   try {
-    // 当前实现只对第一个场地保存
-    const courtId = courtList.value[0].id
-    // 校验：需有兜底的默认价组，且同类型范围不冲突
-    const hasDefault = groupList.value.some((g) => g.matchType === 'default')
-    if (!hasDefault) {
-      message.warning('请至少配置一个“全部日期（默认价）”价格组作为兜底')
-      return
-    }
     const payload: PriceGroup[] = groupList.value.map(({ key, ...g }) => ({
       name: g.name,
       matchType: g.matchType,
+      courtScope: g.courtScope || 'all',
       daysOfWeek: g.daysOfWeek,
       startDate: g.startDate,
       endDate: g.endDate,
@@ -1100,7 +1147,7 @@ async function savePrices() {
         minDuration: r.priceType === 'hourly' ? (r.minDuration ?? 60) : undefined,
       })),
     }))
-    await saveCourtPriceGroups(courtId, payload)
+    await saveVenuePriceGroups(currentVenueId.value, payload)
     message.success('价格配置已保存')
   } finally {
     saving.value = false
@@ -1112,7 +1159,7 @@ const activeTab = ref<'info' | 'courts' | 'prices' | 'intro'>('info')
 
 // 切到价格 Tab 时若价格组为空则重新加载
 watch(activeTab, (tab) => {
-  if (tab === 'prices' && groupList.value.length === 0 && courtList.value.length > 0) {
+  if (tab === 'prices' && groupList.value.length === 0 && currentVenueId.value) {
     loadPriceConfigs()
   }
 })
