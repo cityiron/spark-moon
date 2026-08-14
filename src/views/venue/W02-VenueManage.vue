@@ -228,7 +228,7 @@
                   </template>
                   <a-tag v-for="(r, i) in record.rules" :key="i" class="rule-tag">
                     {{ r.startTime }}-{{ r.endTime }}
-                    {{ priceTypeLabel(r.priceType) }} {{ r.price / 100 }} 元
+                    {{ priceTypeLabel(r.priceType) }} {{ r.price }} 元
                   </a-tag>
                 </template>
                 <template v-else-if="column.dataIndex === 'action'">
@@ -865,7 +865,7 @@ function scopeText(g: PriceGroup): string {
   return '全部日期'
 }
 
-/** 前端行转换: 展示单位为元, 保存时再转回分 */
+/** 前端行转换: 行内规则价格统一为元（保存时再转回分）. */
 function toGroupRow(g: PriceGroup, index: number): PriceGroupRow {
   return {
     ...g,
@@ -886,8 +886,17 @@ async function loadPriceConfigs() {
   }
   priceLoading.value = true
   try {
+    // 后端返回 price 单位为分，加载时统一转为元展示
     const groups = await getVenuePriceGroups(currentVenueId.value)
-    groupList.value = (groups || []).map(toGroupRow)
+    groupList.value = (groups || []).map((g, i) => ({
+      ...g,
+      name: g.name,
+      matchType: g.matchType,
+      priority: g.priority,
+      status: g.status ?? 1,
+      rules: (g.rules || []).map((r) => ({ ...r, price: (r.price || 0) / 100 })),
+      key: g.id || Date.now() + i,
+    }))
   } catch {
     groupList.value = []
   } finally {
