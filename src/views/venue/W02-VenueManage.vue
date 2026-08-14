@@ -932,6 +932,11 @@ const ruleColumns: TableColumnsType = [
   { title: '操作', dataIndex: 'action', width: 120 },
 ]
 
+/** 组内时段规则按开始时间升序排序 */
+function sortRules() {
+  ruleList.value.sort((a, b) => a.startTime.localeCompare(b.startTime))
+}
+
 function openGroupCreate() {
   groupIsEdit.value = false
   editingGroupKey.value = null
@@ -963,6 +968,7 @@ function openGroupEdit(row: PriceGroupRow) {
     status: row.status ?? 1,
   })
   ruleList.value = (row.rules || []).map((r, i) => ({ ...r, key: r.id || Date.now() + i }))
+  sortRules()
   groupDrawerOpen.value = true
 }
 
@@ -994,6 +1000,7 @@ function submitRule() {
     price: ruleForm.price,
     minDuration: ruleForm.minDuration,
   })
+  sortRules()
   Object.assign(ruleForm, {
     startTime: '09:00',
     endTime: '18:00',
@@ -1012,6 +1019,7 @@ function editRule(row: RuleRow) {
     minDuration: row.minDuration,
   })
   ruleList.value = ruleList.value.filter((r) => r.key !== row.key)
+  sortRules()
 }
 
 function removeGroup(key: number) {
