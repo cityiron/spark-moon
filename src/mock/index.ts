@@ -173,18 +173,21 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
   { match: /POST\s+\/venue\/\d+\/court$/, handler: () => ({ code: 0, message: 'ok', data: { id: Date.now() } }) },
   { match: /PUT\s+\/venue\/\d+\/court\/\d+$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
   { match: /DELETE\s+\/venue\/\d+\/court\/\d+$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
-  // 时段价格
+  // 时段价格（价格组 + 优先级，匹配后端 /court/{id}/price-groups）
   {
-    match: /GET\s+\/court\/\d+\/prices$/,
+    match: /GET\s+\/court\/\d+\/price-groups$/,
     handler: () => ({
       code: 0, message: 'ok', data: [
-        { id: 1, courtId: 101, dayOfWeek: 1, startTime: '08:00', endTime: '12:00', priceType: 'hourly', price: 5000, minDuration: 60 },
-        { id: 2, courtId: 101, dayOfWeek: 1, startTime: '12:00', endTime: '18:00', priceType: 'hourly', price: 4000, minDuration: 60 },
-        { id: 3, courtId: 101, dayOfWeek: 1, startTime: '18:00', endTime: '22:00', priceType: 'hourly', price: 6000, minDuration: 60 },
+        { id: 1, courtId: 101, name: '默认价', matchType: 'default', priority: 0, status: 1,
+          rules: [{ id: 1, startTime: '09:00', endTime: '22:00', priceType: 'hourly', price: 5000, minDuration: 60 }] },
+        { id: 2, courtId: 101, name: '工作日晚间高峰', matchType: 'weekday', daysOfWeek: '1,2,3,4,5', priority: 5, status: 1,
+          rules: [{ id: 2, startTime: '18:00', endTime: '22:00', priceType: 'range', price: 18000 }] },
+        { id: 3, courtId: 101, name: '周末价', matchType: 'weekend', daysOfWeek: '6,7', priority: 5, status: 1,
+          rules: [{ id: 3, startTime: '09:00', endTime: '22:00', priceType: 'hourly', price: 8000, minDuration: 60 }] },
       ],
     }),
   },
-  { match: /POST\s+\/court\/\d+\/prices$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
+  { match: /PUT\s+\/court\/\d+\/price-groups$/, handler: () => ({ code: 0, message: 'ok', data: null }) },
   // 会员列表
   {
     match: /GET\s+\/member\/list$/,

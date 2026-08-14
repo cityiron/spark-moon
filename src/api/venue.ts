@@ -1,6 +1,6 @@
 import { request } from './request'
 import type { PageQuery, PageResult } from '@/types/api'
-import type { Venue, Court, CourtPriceConfig } from '@/types/models'
+import type { Venue, Court, PriceGroup } from '@/types/models'
 
 /** 场馆查询参数 */
 export interface VenueQuery extends PageQuery {
@@ -86,18 +86,19 @@ export function deleteCourt(venueId: number, courtId: number) {
   })
 }
 
-/** 场地价格配置 */
-export function getCourtPriceConfigs(courtId: number) {
-  return request<CourtPriceConfig[]>({
-    url: `/court/${courtId}/prices`,
+/** 场地价格分组配置（按 priority 降序返回） */
+export function getCourtPriceGroups(courtId: number) {
+  return request<PriceGroup[]>({
+    url: `/court/${courtId}/price-groups`,
     method: 'get',
   })
 }
 
-export function saveCourtPriceConfigs(courtId: number, data: CourtPriceConfig[]) {
+/** 保存场地价格分组（全量覆盖） */
+export function saveCourtPriceGroups(courtId: number, data: PriceGroup[]) {
   return request<void>({
-    url: `/court/${courtId}/prices`,
+    url: `/court/${courtId}/price-groups`,
     method: 'put',
-    data: { configs: data },
+    data,
   })
 }

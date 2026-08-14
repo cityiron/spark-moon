@@ -168,97 +168,63 @@
           <div class="page-card">
             <div class="card-toolbar">
               <div class="card-title">时段价格配置</div>
+              <a-space>
+                <span class="hint-text">价格组按优先级从高到低匹配，当天命中最高优先级的组生效</span>
+                <a-button type="primary" :disabled="courtList.length === 0" @click="openGroupCreate">
+                  <plus-outlined />
+                  新增价格组
+                </a-button>
+              </a-space>
             </div>
 
-            <!-- 新增/编辑价格表单 -->
-            <a-form layout="inline" :model="priceForm" class="price-form">
-              <a-form-item label="日期类型">
-                <a-select
-                  v-model:value="priceForm.dayOfWeek"
-                  :options="dayOptions"
-                  style="width: 110px"
-                />
-              </a-form-item>
-              <a-form-item label="开始时间">
-                <a-time-picker
-                  v-model:value="priceForm.startTime"
-                  format="HH:mm"
-                  value-format="HH:mm"
-                  style="width: 100px"
-                  placeholder="09:00"
-                />
-              </a-form-item>
-              <a-form-item label="结束时间">
-                <a-time-picker
-                  v-model:value="priceForm.endTime"
-                  format="HH:mm"
-                  value-format="HH:mm"
-                  style="width: 100px"
-                  placeholder="18:00"
-                />
-              </a-form-item>
-              <a-form-item label="计价方式">
-                <a-select
-                  v-model:value="priceForm.priceType"
-                  :options="priceTypeOptions"
-                  style="width: 130px"
-                />
-              </a-form-item>
-              <a-form-item label="价格">
-                <a-input-number
-                  v-model:value="priceForm.price"
-                  :min="0"
-                  :step="10"
-                  style="width: 100px"
-                  placeholder="元"
-                  addon-after="元"
-                />
-              </a-form-item>
-              <a-form-item label="最小时长">
-                <a-input-number
-                  v-model:value="priceForm.minDuration"
-                  :min="30"
-                  :step="30"
-                  style="width: 110px"
-                  addon-after="分钟"
-                />
-              </a-form-item>
-              <a-form-item>
-                <a-button type="primary" @click="submitPrice">
-                  {{ editingPriceKey ? '更新价格' : '新增价格' }}
-                </a-button>
-                <a-button v-if="editingPriceKey" style="margin-left: 8px" @click="cancelEditPrice">取消编辑</a-button>
-              </a-form-item>
-            </a-form>
+            <a-alert
+              v-if="courtList.length === 0"
+              type="warning"
+              show-icon
+              message="请先在“场地配置”中添加场地"
+              style="margin-bottom: 16px"
+            />
 
+            <!-- 价格组列表 -->
             <a-table
-              :columns="priceColumns"
-              :data-source="priceList"
+              :columns="groupColumns"
+              :data-source="groupList"
               row-key="key"
               :pagination="false"
               size="middle"
-              style="margin-top: 16px"
+              :loading="priceLoading"
             >
-              <template #bodyCell="{ column, record, index }">
-                <template v-if="column.dataIndex === 'dayOfWeek'">
-                  {{ dayLabel(record.dayOfWeek) }}
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.dataIndex === 'priority'">
+                  <a-tag :color="record.priority > 0 ? 'geekblue' : 'default'">优先级 {{ record.priority }}</a-tag>
                 </template>
-                <template v-else-if="column.dataIndex === 'timeRange'">
-                  {{ record.startTime }} - {{ record.endTime }}
+                <template v-else-if="column.dataIndex === 'matchType'">
+                  <a-tag :color="matchTypeColor(record.matchType)">{{ matchTypeLabel(record.matchType) }}</a-tag>
                 </template>
-                <template v-else-if="column.dataIndex === 'priceType'">
-                  {{ priceTypeLabel(record.priceType) }}
+                <template v-else-if="column.dataIndex === 'scope'">
+                  {{ scopeText(record) }}
                 </template>
-                <template v-else-if="column.dataIndex === 'price'">
-                  <span class="price-tag">{{ record.price }} 元/{{ record.priceType === 'hourly' ? '小时' : '区间' }}</span>
+                <template v-else-if="column.dataIndex === 'status'">
+                  <a-switch
+                    :checked="record.status === 1"
+                    checked-children="启用"
+                    un-checked-children="停用"
+                    @change="(v: boolean) => { record.status = v ? 1 : 0 }"
+                  />
                 </template>
-                <template v-else-if="column.dataIndex === 'minDuration'">
-                  {{ record.minDuration }} 分钟
+                <template v-else-if="column.dataIndex === 'rules'">
+                  <template v-if="record.rules.length === 0">
+                    <span class="hint-text">未配置时段</span>
+                  </template>
+                  <a-tag v-for="(r, i) in record.rules" :key="i" class="rule-tag">
+                    {{ r.startTime }}-{{ r.endTime }}
+                    {{ priceTypeLabel(r.priceType) }} {{ r.price / 100 }} 元
+                  </a-tag>
                 </template>
                 <template v-else-if="column.dataIndex === 'action'">
-                  <a @click="editPrice(record)">编辑</a>
+                  <a @click="openGroupEdit(record)">编辑</a>
                   <a-divider type="vertical" />
-                  <a-popconfirm title="删除该规则?" @confirm="priceList.splice(index, 1)">
+                  <a-popconfirm title="删除该价格组?" @confirm="removeGroup(record.key)">
                     <a class="danger-link">删除</a>
                   </a-popconfirm>
                 </template>
@@ -266,7 +232,9 @@
             </a-table>
 
             <div class="form-actions">
-              <a-button type="primary" :loading="saving" @click="savePrices">保存价格配置</a-button>
+              <a-button type="primary" :loading="saving" :disabled="courtList.length === 0" @click="savePrices">
+                保存价格配置
+              </a-button>
             </div>
           </div>
         </a-tab-pane>
@@ -365,11 +333,145 @@
         </div>
       </template>
     </a-drawer>
+
+    <!-- 价格组新增/编辑 Drawer -->
+    <a-drawer
+      v-model:open="groupDrawerOpen"
+      :title="groupIsEdit ? '编辑价格组' : '新增价格组'"
+      width="640"
+      :destroy-on-close="true"
+    >
+      <a-form ref="groupFormRef" :model="groupForm" :rules="groupRules" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="组名称" name="name">
+              <a-input v-model:value="groupForm.name" placeholder="如：默认价/工作日/周末/国庆" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="适用日期类型" name="matchType">
+              <a-select
+                v-model:value="groupForm.matchType"
+                :options="matchTypeOptions"
+                style="width: 100%"
+                @change="onMatchTypeChange"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row v-if="showWeekdayPicker" :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="适用星期">
+              <a-checkbox-group v-model:value="groupForm.daysArr">
+                <a-checkbox v-for="d in dayOptions" :key="d.value" :value="d.value">
+                  {{ d.label }}
+                </a-checkbox>
+              </a-checkbox-group>
+              <div class="hint-text">可选多个星期；若选“周一~周五”即工作日，选“周六、周日”即周末</div>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row v-if="showDatePicker" :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="适用日期区间（法定节假日/固定日期请在此选择具体日期）">
+              <a-range-picker
+                v-model:value="groupForm.dateRange"
+                :value-format="'YYYY-MM-DD'"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="优先级（数字越大越优先）" name="priority">
+              <a-input-number v-model:value="groupForm.priority" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="状态">
+              <a-radio-group v-model:value="groupForm.status">
+                <a-radio :value="1">启用</a-radio>
+                <a-radio :value="0">停用</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <div class="card-title">时段规则（组内各时段的计价）</div>
+        <a-form layout="inline" class="price-form" :model="ruleForm">
+          <a-form-item label="开始时间">
+            <a-time-picker v-model:value="ruleForm.startTime" format="HH:mm" value-format="HH:mm" style="width: 100px" />
+          </a-form-item>
+          <a-form-item label="结束时间">
+            <a-time-picker v-model:value="ruleForm.endTime" format="HH:mm" value-format="HH:mm" style="width: 100px" />
+          </a-form-item>
+          <a-form-item label="计价方式">
+            <a-select v-model:value="ruleForm.priceType" :options="priceTypeOptions" style="width: 130px" />
+          </a-form-item>
+          <a-form-item label="价格">
+            <a-input-number
+              v-model:value="ruleForm.price"
+              :min="0"
+              :step="10"
+              style="width: 110px"
+              :addon-after="ruleForm.priceType === 'range' ? '元/整段' : '元/小时'"
+            />
+          </a-form-item>
+          <a-form-item v-if="ruleForm.priceType === 'hourly'" label="最小时长">
+            <a-input-number v-model:value="ruleForm.minDuration" :min="30" :step="30" style="width: 100px" addon-after="分钟" />
+          </a-form-item>
+          <a-form-item>
+            <a-button type="primary" @click="submitRule">添加规则</a-button>
+          </a-form-item>
+        </a-form>
+
+        <a-table
+          :columns="ruleColumns"
+          :data-source="ruleList"
+          row-key="key"
+          :pagination="false"
+          size="small"
+          style="margin-top: 8px"
+        >
+          <template #bodyCell="{ column, record, index }">
+            <template v-if="column.dataIndex === 'timeRange'">
+              {{ record.startTime }} - {{ record.endTime }}
+            </template>
+            <template v-else-if="column.dataIndex === 'priceType'">
+              {{ priceTypeLabel(record.priceType) }}
+            </template>
+            <template v-else-if="column.dataIndex === 'price'">
+              <span class="price-tag">{{ record.price }} 元/{{ record.priceType === 'hourly' ? '小时' : '整段' }}</span>
+            </template>
+            <template v-else-if="column.dataIndex === 'minDuration'">
+              {{ record.minDuration }} 分钟
+            </template>
+            <template v-else-if="column.dataIndex === 'action'">
+              <a @click="editRule(record)">编辑</a>
+              <a-divider type="vertical" />
+              <a-popconfirm title="删除该规则?" @confirm="ruleList.splice(index, 1)">
+                <a class="danger-link">删除</a>
+              </a-popconfirm>
+            </template>
+          </template>
+        </a-table>
+      </a-form>
+      <template #footer>
+        <div style="text-align: right">
+          <a-button style="margin-right: 8px" @click="groupDrawerOpen = false">取消</a-button>
+          <a-button type="primary" :loading="saving" @click="submitGroup">保存价格组</a-button>
+        </div>
+      </template>
+    </a-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { message, type FormInstance, type TableColumnsType, type UploadFile } from 'ant-design-vue'
 import { PlusOutlined, LockOutlined, EnvironmentOutlined } from '@ant-design/icons-vue'
 import {
@@ -380,16 +482,17 @@ import {
   createCourt,
   updateCourt,
   deleteCourt,
-  getCourtPriceConfigs,
-  saveCourtPriceConfigs,
+  getCourtPriceGroups,
+  saveCourtPriceGroups,
 } from '@/api/venue'
 import type {
   Venue,
   Court,
-  CourtPriceConfig,
   CourtType,
-  DayOfWeek,
   PriceType,
+  PriceGroup,
+  PriceGroupMatchType,
+  PriceRule,
 } from '@/types/models'
 
 // ===== 映射 =====
@@ -421,8 +524,29 @@ const dayOptions = [
   { label: '周六', value: 6 },
   { label: '周日', value: 7 },
 ]
-function dayLabel(d: DayOfWeek): string {
+function dayLabel(d: number): string {
   return dayOptions.find((o) => o.value === d)?.label || String(d)
+}
+
+const matchTypeOptions = [
+  { label: '全部日期（默认价）', value: 'default' as PriceGroupMatchType },
+  { label: '工作日', value: 'weekday' as PriceGroupMatchType },
+  { label: '周末', value: 'weekend' as PriceGroupMatchType },
+  { label: '法定节假日', value: 'holiday' as PriceGroupMatchType },
+  { label: '固定日期', value: 'custom' as PriceGroupMatchType },
+]
+function matchTypeLabel(t: PriceGroupMatchType): string {
+  return matchTypeOptions.find((o) => o.value === t)?.label || t
+}
+function matchTypeColor(t: PriceGroupMatchType): string {
+  switch (t) {
+    case 'default': return 'default'
+    case 'weekday': return 'blue'
+    case 'weekend': return 'green'
+    case 'holiday': return 'red'
+    case 'custom': return 'purple'
+    default: return 'default'
+  }
 }
 
 const priceTypeOptions = [
@@ -663,111 +787,188 @@ async function handleDeleteCourt(court: Court) {
   }
 }
 
-// ===== 时段价格 =====
-type PriceConfigRow = CourtPriceConfig & { key: number }
-const priceList = ref<PriceConfigRow[]>([])
-const priceColumns: TableColumnsType = [
-  { title: '日期类型', dataIndex: 'dayOfWeek', width: 100 },
-  { title: '时段区间', dataIndex: 'timeRange', width: 180 },
-  { title: '计价方式', dataIndex: 'priceType', width: 120 },
-  { title: '价格', dataIndex: 'price', width: 140 },
-  { title: '最小时长', dataIndex: 'minDuration', width: 120 },
-  { title: '操作', dataIndex: 'action', width: 140 },
+// ===== 时段价格（价格组 + 优先级） =====
+type PriceGroupRow = PriceGroup & { key: number }
+const groupList = ref<PriceGroupRow[]>([])
+const priceLoading = ref(false)
+const groupColumns: TableColumnsType = [
+  { title: '优先级', dataIndex: 'priority', width: 110 },
+  { title: '组名称', dataIndex: 'name', width: 140 },
+  { title: '适用日期', dataIndex: 'matchType', width: 120 },
+  { title: '适用范围', dataIndex: 'scope', width: 200 },
+  { title: '时段规则', dataIndex: 'rules' },
+  { title: '状态', dataIndex: 'status', width: 90 },
+  { title: '操作', dataIndex: 'action', width: 120 },
 ]
 
-const priceForm = reactive<{
-  dayOfWeek: DayOfWeek
+/** 组内适用范围文案 */
+function scopeText(g: PriceGroup): string {
+  if (g.matchType === 'weekday' || g.matchType === 'weekend') {
+    if (!g.daysOfWeek) return '未选择星期'
+    return g.daysOfWeek.split(',').map((d) => dayLabel(Number(d))).join('、')
+  }
+  if (g.matchType === 'holiday' || g.matchType === 'custom') {
+    if (g.startDate && g.endDate) return `${g.startDate} ~ ${g.endDate}`
+    return '未选择日期'
+  }
+  return '全部日期'
+}
+
+/** 前端行转换: 展示单位为元, 保存时再转回分 */
+function toGroupRow(g: PriceGroup, index: number): PriceGroupRow {
+  return {
+    ...g,
+    name: g.name,
+    matchType: g.matchType,
+    priority: g.priority,
+    status: g.status ?? 1,
+    rules: (g.rules || []).map((r) => ({ ...r })),
+    key: g.id || Date.now() + index,
+  }
+}
+
+async function loadPriceConfigs() {
+  // 价格按场地配置：当前实现只对第一个场地
+  if (courtList.value.length === 0) {
+    groupList.value = []
+    return
+  }
+  const courtId = courtList.value[0].id
+  priceLoading.value = true
+  try {
+    const groups = await getCourtPriceGroups(courtId)
+    groupList.value = (groups || []).map(toGroupRow)
+  } catch {
+    groupList.value = []
+  } finally {
+    priceLoading.value = false
+  }
+}
+
+// ---- 价格组编辑 ----
+const groupDrawerOpen = ref(false)
+const groupIsEdit = ref(false)
+const groupFormRef = ref<FormInstance>()
+const editingGroupKey = ref<number | null>(null)
+const groupForm = reactive<{
+  name: string
+  matchType: PriceGroupMatchType
+  daysArr: number[]
+  dateRange: [string, string] | []
+  priority: number
+  status: number
+}>({
+  name: '',
+  matchType: 'default',
+  daysArr: [],
+  dateRange: [],
+  priority: 0,
+  status: 1,
+})
+const groupRules = {
+  name: [{ required: true, message: '请输入组名称', trigger: 'blur' }],
+}
+
+/** weekday/weekend 显示星期多选 */
+const showWeekdayPicker = computed(() =>
+  groupForm.matchType === 'weekday' || groupForm.matchType === 'weekend')
+/** holiday/custom 显示日期区间 */
+const showDatePicker = computed(() =>
+  groupForm.matchType === 'holiday' || groupForm.matchType === 'custom')
+
+function onMatchTypeChange() {
+  // 切换类型时清空不适用的范围
+  groupForm.daysArr = []
+  groupForm.dateRange = []
+}
+
+/** 组内规则 */
+type RuleRow = PriceRule & { key: number }
+const ruleList = ref<RuleRow[]>([])
+const ruleForm = reactive<{
   startTime: string
   endTime: string
   priceType: PriceType
   price: number
   minDuration: number
 }>({
-  dayOfWeek: 1,
   startTime: '09:00',
   endTime: '18:00',
   priceType: 'hourly',
   price: 50,
   minDuration: 60,
 })
-const editingPriceKey = ref<number | null>(null)
+const ruleColumns: TableColumnsType = [
+  { title: '时段区间', dataIndex: 'timeRange', width: 140 },
+  { title: '计价方式', dataIndex: 'priceType', width: 120 },
+  { title: '价格', dataIndex: 'price', width: 140 },
+  { title: '最小时长', dataIndex: 'minDuration', width: 110 },
+  { title: '操作', dataIndex: 'action', width: 120 },
+]
 
-async function loadPriceConfigs() {
-  // 价格按场地配置：默认取第一个场地的价格作为展示
-  if (courtList.value.length === 0) {
-    priceList.value = []
-    return
-  }
-  const courtId = courtList.value[0].id
-  try {
-    const configs = await getCourtPriceConfigs(courtId)
-    // 后端 price 单位为分，前端展示用元
-    priceList.value = (configs || []).map((c, i) => ({
-      ...c,
-      price: Math.round((c.price || 0) / 100),
-      key: c.id || Date.now() + i,
-    }))
-  } catch {
-    priceList.value = []
-  }
+function openGroupCreate() {
+  groupIsEdit.value = false
+  editingGroupKey.value = null
+  Object.assign(groupForm, {
+    name: '',
+    matchType: 'default',
+    daysArr: [],
+    dateRange: [],
+    priority: 0,
+    status: 1,
+  })
+  ruleList.value = []
+  groupDrawerOpen.value = true
 }
 
-function submitPrice() {
-  if (!priceForm.startTime || !priceForm.endTime) {
+function openGroupEdit(row: PriceGroupRow) {
+  groupIsEdit.value = true
+  editingGroupKey.value = row.key
+  const daysArr = row.daysOfWeek ? row.daysOfWeek.split(',').map(Number).filter(Boolean) : []
+  const dateRange: [string, string] | [] = row.startDate && row.endDate
+    ? [row.startDate, row.endDate]
+    : []
+  Object.assign(groupForm, {
+    name: row.name,
+    matchType: row.matchType,
+    daysArr,
+    dateRange,
+    priority: row.priority,
+    status: row.status ?? 1,
+  })
+  ruleList.value = (row.rules || []).map((r, i) => ({ ...r, key: r.id || Date.now() + i }))
+  groupDrawerOpen.value = true
+}
+
+function submitRule() {
+  if (!ruleForm.startTime || !ruleForm.endTime) {
     message.warning('请选择时段')
     return
   }
-  if (priceForm.startTime >= priceForm.endTime) {
+  if (ruleForm.startTime >= ruleForm.endTime) {
     message.warning('结束时间必须晚于开始时间')
     return
   }
-  if (!priceForm.price || priceForm.price <= 0) {
+  if (!ruleForm.price || ruleForm.price <= 0) {
     message.warning('请输入价格')
     return
   }
-  // 冲突检测：同一日期类型下时段重叠
-  const overlap = priceList.value.some((p) => {
-    if (editingPriceKey.value === p.key) return false
-    return (
-      p.dayOfWeek === priceForm.dayOfWeek &&
-      priceForm.startTime < p.endTime &&
-      priceForm.endTime > p.startTime
-    )
-  })
+  // 冲突检测：组内时段重叠
+  const overlap = ruleList.value.some((r) =>
+    ruleForm.startTime < r.endTime && ruleForm.endTime > r.startTime)
   if (overlap) {
-    message.warning('时段冲突，请调整时段范围')
+    message.warning('组内时段冲突，请调整时段范围')
     return
   }
-  if (editingPriceKey.value) {
-    const idx = priceList.value.findIndex((p) => p.key === editingPriceKey.value)
-    if (idx >= 0) {
-      priceList.value[idx] = {
-        ...priceList.value[idx],
-        dayOfWeek: priceForm.dayOfWeek,
-        startTime: priceForm.startTime,
-        endTime: priceForm.endTime,
-        priceType: priceForm.priceType,
-        price: priceForm.price,
-        minDuration: priceForm.minDuration,
-      }
-    }
-    editingPriceKey.value = null
-    message.success('价格已更新')
-  } else {
-    priceList.value.push({
-      key: Date.now(),
-      dayOfWeek: priceForm.dayOfWeek,
-      startTime: priceForm.startTime,
-      endTime: priceForm.endTime,
-      priceType: priceForm.priceType,
-      price: priceForm.price,
-      minDuration: priceForm.minDuration,
-    })
-    message.success('已新增价格')
-  }
-  // 重置表单
-  Object.assign(priceForm, {
-    dayOfWeek: 1,
+  ruleList.value.push({
+    key: Date.now(),
+    startTime: ruleForm.startTime,
+    endTime: ruleForm.endTime,
+    priceType: ruleForm.priceType,
+    price: ruleForm.price,
+    minDuration: ruleForm.minDuration,
+  })
+  Object.assign(ruleForm, {
     startTime: '09:00',
     endTime: '18:00',
     priceType: 'hourly',
@@ -776,28 +977,62 @@ function submitPrice() {
   })
 }
 
-function editPrice(row: PriceConfigRow) {
-  editingPriceKey.value = row.key
-  Object.assign(priceForm, {
-    dayOfWeek: row.dayOfWeek,
+function editRule(row: RuleRow) {
+  Object.assign(ruleForm, {
     startTime: row.startTime,
     endTime: row.endTime,
     priceType: row.priceType,
     price: row.price,
     minDuration: row.minDuration,
   })
+  ruleList.value = ruleList.value.filter((r) => r.key !== row.key)
 }
 
-function cancelEditPrice() {
-  editingPriceKey.value = null
-  Object.assign(priceForm, {
-    dayOfWeek: 1,
-    startTime: '09:00',
-    endTime: '18:00',
-    priceType: 'hourly',
-    price: 50,
-    minDuration: 60,
-  })
+function removeGroup(key: number) {
+  groupList.value = groupList.value.filter((g) => g.key !== key)
+}
+
+function submitGroup() {
+  if (!groupForm.name) {
+    message.warning('请输入组名称')
+    return
+  }
+  if (groupForm.matchType === 'weekday' || groupForm.matchType === 'weekend') {
+    if (groupForm.daysArr.length === 0) {
+      message.warning('请选择适用星期')
+      return
+    }
+  }
+  if (groupForm.matchType === 'holiday' || groupForm.matchType === 'custom') {
+    if (!groupForm.dateRange || groupForm.dateRange.length !== 2) {
+      message.warning('请选择适用日期区间')
+      return
+    }
+  }
+  const payload: PriceGroup = {
+    name: groupForm.name,
+    matchType: groupForm.matchType,
+    priority: groupForm.priority,
+    status: groupForm.status,
+    rules: ruleList.value.map(({ key, ...rest }) => ({ ...rest })),
+  }
+  if (showWeekdayPicker.value) {
+    payload.daysOfWeek = groupForm.daysArr.sort((a, b) => a - b).join(',')
+  }
+  if (showDatePicker.value && groupForm.dateRange.length === 2) {
+    payload.startDate = groupForm.dateRange[0]
+    payload.endDate = groupForm.dateRange[1]
+  }
+
+  if (groupIsEdit.value && editingGroupKey.value != null) {
+    const idx = groupList.value.findIndex((g) => g.key === editingGroupKey.value)
+    if (idx >= 0) {
+      groupList.value[idx] = toGroupRow(payload, idx)
+    }
+  } else {
+    groupList.value.push(toGroupRow(payload, groupList.value.length))
+  }
+  groupDrawerOpen.value = false
 }
 
 async function savePrices() {
@@ -807,14 +1042,31 @@ async function savePrices() {
   }
   saving.value = true
   try {
-    // 逐个场地保存（简化处理：当前实现只对第一个场地保存）
+    // 当前实现只对第一个场地保存
     const courtId = courtList.value[0].id
-    const payload: CourtPriceConfig[] = priceList.value.map(({ key, ...rest }) => ({
-      ...rest,
-      courtId,
-      price: rest.price * 100, // 元转分
+    // 校验：需有兜底的默认价组，且同类型范围不冲突
+    const hasDefault = groupList.value.some((g) => g.matchType === 'default')
+    if (!hasDefault) {
+      message.warning('请至少配置一个“全部日期（默认价）”价格组作为兜底')
+      return
+    }
+    const payload: PriceGroup[] = groupList.value.map(({ key, ...g }) => ({
+      name: g.name,
+      matchType: g.matchType,
+      daysOfWeek: g.daysOfWeek,
+      startDate: g.startDate,
+      endDate: g.endDate,
+      priority: g.priority,
+      status: g.status ?? 1,
+      rules: (g.rules || []).map((r) => ({
+        startTime: r.startTime,
+        endTime: r.endTime,
+        priceType: r.priceType,
+        price: Math.round((r.price || 0) * 100), // 元转分
+        minDuration: r.priceType === 'hourly' ? (r.minDuration ?? 60) : undefined,
+      })),
     }))
-    await saveCourtPriceConfigs(courtId, payload)
+    await saveCourtPriceGroups(courtId, payload)
     message.success('价格配置已保存')
   } finally {
     saving.value = false
@@ -824,9 +1076,9 @@ async function savePrices() {
 // ===== Tab 切换 =====
 const activeTab = ref<'info' | 'courts' | 'prices' | 'intro'>('info')
 
-// 切到价格 Tab 时若价格列表为空则重新加载
+// 切到价格 Tab 时若价格组为空则重新加载
 watch(activeTab, (tab) => {
-  if (tab === 'prices' && priceList.value.length === 0 && courtList.value.length > 0) {
+  if (tab === 'prices' && groupList.value.length === 0 && courtList.value.length > 0) {
     loadPriceConfigs()
   }
 })
@@ -935,6 +1187,15 @@ onMounted(() => {
   background: #e0f2fe;
   color: #0284c7;
   font-weight: 500;
+}
+
+.rule-tag {
+  margin-bottom: 4px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .danger-link {
