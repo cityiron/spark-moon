@@ -1,0 +1,139 @@
+/* ===== 羽球管家 全局样式 ===== */
+/* 品牌主色 #059669 (emerald green) */
+
+:root {
+  --brand-color: #059669;
+  --brand-color-light: #10b981;
+  --brand-color-dark: #047857;
+  --header-height: 56px;
+  --sider-width: 220px;
+  --sider-collapsed-width: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.88);
+  background-color: #f5f5f5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--brand-color);
+  text-decoration: none;
+  transition: color 0.2s;
+  &:hover {
+    color: var(--brand-color-light);
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用工具类 */
+.flex {
+  display: flex;
+}
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mt-8 {
+  margin-top: 8px;
+}
+.mt-16 {
+  margin-top: 16px;
+}
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+/* 页面容器 */
+.page-container {
+  padding: 16px;
+}
+
+.page-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* 表格搜索栏 */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.table-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 预订网格单元格状态色 */
+.slot-free {
+  background-color: #d1fae5 !important;
+  color: #065f46;
+}
+.slot-booked {
+  background-color: #e5e7eb !important;
+  color: #4b5563;
+}
+.slot-locked {
+  background-color: #ffedd5 !important;
+  color: #9a3412;
+}
+.slot-training {
+  background-color: #ede9fe !important;
+  color: #5b21b6;
+}
+.slot-cell {
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-align: center;
+  font-size: 12px;
+  user-select: none;
+  &:hover {
+    opacity: 0.8;
+  }
+}
