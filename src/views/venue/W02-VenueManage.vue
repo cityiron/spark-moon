@@ -364,11 +364,18 @@
           <a-col :span="24">
             <a-form-item label="适用星期">
               <a-checkbox-group v-model:value="groupForm.daysArr">
-                <a-checkbox v-for="d in dayOptions" :key="d.value" :value="d.value">
+                <a-checkbox
+                  v-for="d in dayOptions"
+                  :key="d.value"
+                  :value="d.value"
+                  :disabled="!weekdayPickerEnabled(d.value)"
+                >
                   {{ d.label }}
                 </a-checkbox>
               </a-checkbox-group>
-              <div class="hint-text">可选多个星期；若选“周一~周五”即工作日，选“周六、周日”即周末</div>
+              <div class="hint-text">
+                {{ weekdayPickerHint }}
+              </div>
             </a-form-item>
           </a-col>
         </a-row>
@@ -876,9 +883,28 @@ const showWeekdayPicker = computed(() =>
 const showDatePicker = computed(() =>
   groupForm.matchType === 'holiday' || groupForm.matchType === 'custom')
 
+/** 工作日=周一~周五, 周末=周六/周日；其它星期禁用 */
+function weekdayPickerEnabled(d: number): boolean {
+  if (groupForm.matchType === 'weekday') return d >= 1 && d <= 5
+  if (groupForm.matchType === 'weekend') return d === 6 || d === 7
+  return true
+}
+
+const weekdayPickerHint = computed(() => {
+  if (groupForm.matchType === 'weekday') return '工作日固定为周一~周五，不可选周六、周日'
+  if (groupForm.matchType === 'weekend') return '周末固定为周六、周日，不可选周一~周五'
+  return '可选多个星期'
+})
+
 function onMatchTypeChange() {
-  // 切换类型时清空不适用的范围
-  groupForm.daysArr = []
+  // 工作日/周末固定默认勾选对应星期；其它类型清空
+  if (groupForm.matchType === 'weekday') {
+    groupForm.daysArr = [1, 2, 3, 4, 5]
+  } else if (groupForm.matchType === 'weekend') {
+    groupForm.daysArr = [6, 7]
+  } else {
+    groupForm.daysArr = []
+  }
   groupForm.dateRange = []
 }
 
