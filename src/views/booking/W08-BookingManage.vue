@@ -342,7 +342,10 @@ const loading = ref(false)
 const gridRows = ref<CourtGridRow[]>([])
 const timeSlots = computed<string[]>(() => {
   if (gridRows.value.length === 0) return []
-  return gridRows.value[0].slots.map((s) => s.label)
+  return gridRows.value[0].slots.map((s) => {
+    const end = s.endTime ? s.endTime.slice(0, 5) : ''
+    return end ? `${s.label}-${end}` : s.label
+  })
 })
 
 const courtOptions = computed(() => {
@@ -674,8 +677,10 @@ onMounted(() => {
       text-align: left;
     }
     .time-header {
-      min-width: 70px;
+      min-width: 92px;
       text-align: center;
+      white-space: nowrap;
+      font-size: 12px;
     }
   }
   tbody {
