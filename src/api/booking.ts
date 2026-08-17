@@ -16,10 +16,10 @@ export function getBookingGrid(params: BookingGridQuery) {
   })
 }
 
-/** 代客预订 */
+/** 代客预订（前台代会员下单，memberPhone 指定归属会员） */
 export function proxyBooking(data: Partial<BookingOrder>) {
   return request<BookingOrder>({
-    url: '/booking/proxy',
+    url: '/booking/orders',
     method: 'post',
     data,
   })

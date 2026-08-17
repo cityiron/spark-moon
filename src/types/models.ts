@@ -170,6 +170,10 @@ export interface BookingOrder {
   /** 实付金额(分) */
   paidAmount: number
   status: BookingStatus
+  /** 预订时段列表 */
+  timeSlots?: { startTime: string, endTime: string }[]
+  /** 支付方式: CARD / WECHAT / ALIPAY / OFFLINE */
+  paymentMethod?: string
   /** 备注 */
   remark?: string
   /** 是否代客预订 */

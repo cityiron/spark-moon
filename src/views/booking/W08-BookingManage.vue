@@ -174,6 +174,7 @@
           <a-radio-group v-model:value="proxyForm.payMethod">
             <a-radio-button value="offline">线下收款</a-radio-button>
             <a-radio-button value="wechat">微信扫码付</a-radio-button>
+            <a-radio-button value="alipay">支付宝扫码付</a-radio-button>
             <a-radio-button value="balance">会员卡</a-radio-button>
           </a-radio-group>
         </a-form-item>
@@ -473,7 +474,7 @@ function statusColor(s: BookingStatus): string {
 const proxyDrawerOpen = ref(false)
 const proxyFormRef = ref<FormInstance>()
 const submitting = ref(false)
-const proxyForm = reactive<Partial<BookingOrder> & { payMethod?: 'offline' | 'wechat' | 'balance' }>({
+const proxyForm = reactive<Partial<BookingOrder> & { payMethod?: 'offline' | 'wechat' | 'alipay' | 'balance' }>({
   courtId: undefined,
   date: dayjs().format('YYYY-MM-DD'),
   startTime: '',
@@ -613,16 +614,46 @@ function openProxyBooking(court?: Court, slot?: TimeSlot) {
   proxyDrawerOpen.value = true
 }
 
+/** 前端支付方式 → 后端 paymentMethod 枚举 */
+const PAY_METHOD_MAP: Record<string, string> = {
+  offline: 'OFFLINE',
+  wechat: 'WECHAT',
+  alipay: 'ALIPAY',
+  balance: 'CARD',
+}
+
+/** 由开始/结束时间生成连续的整点时段数组 */
+function buildTimeSlots(start: string, end: string): { startTime: string, endTime: string }[] {
+  const slots: { startTime: string, endTime: string }[] = []
+  let cur = dayjs(`2000-01-01 ${start}`)
+  const endM = dayjs(`2000-01-01 ${end}`)
+  while (cur.isBefore(endM)) {
+    const next = cur.add(1, 'hour')
+    if (next.isAfter(endM)) break
+    slots.push({ startTime: cur.format('HH:mm'), endTime: next.format('HH:mm') })
+    cur = next
+  }
+  return slots
+}
+
 async function submitProxy() {
   await proxyFormRef.value?.validate()
   submitting.value = true
   try {
+    const timeSlots = buildTimeSlots(proxyForm.startTime!, proxyForm.endTime!)
+    if (timeSlots.length === 0) {
+      message.warning('请选择有效的预订时段')
+      return
+    }
     await proxyBooking({
-      ...proxyForm,
       venueId: selectedVenueId.value,
+      courtId: proxyForm.courtId,
       date: proxyForm.date as string,
-      duration: calcDuration(proxyForm.startTime!, proxyForm.endTime!),
-      amount: proxyAmount.value,
+      timeSlots,
+      paymentMethod: PAY_METHOD_MAP[proxyForm.payMethod || 'offline'],
+      memberPhone: proxyForm.memberPhone,
+      memberName: proxyForm.memberName,
+      remark: proxyForm.remark,
     })
     message.success('代客预订成功')
     proxyDrawerOpen.value = false
