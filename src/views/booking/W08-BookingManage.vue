@@ -89,7 +89,9 @@
                   </a-tooltip>
                   <span v-else-if="slot.status === 'locked'" class="slot-text">锁定</span>
                   <span v-else-if="slot.status === 'training'" class="slot-text">培训</span>
-                  <span v-else class="slot-text">空</span>
+                  <span v-else class="slot-price">
+                    {{ slot.rangeKey ? `${fmtPrice(slot.price)}/整段` : `¥${fmtPrice(slot.price)}` }}
+                  </span>
                 </td>
               </tr>
             </tbody>
@@ -428,6 +430,12 @@ function statusLabel(s: BookingStatus): string {
   }
   return map[s] || s
 }
+/** 分 → 元（取整） */
+function fmtPrice(cents?: number): string {
+  if (cents == null) return '-'
+  return (cents / 100).toFixed(0)
+}
+
 function statusColor(s: BookingStatus): string {
   const map: Record<BookingStatus, string> = {
     pending: 'orange',
@@ -462,14 +470,25 @@ const proxyRules = {
   memberPhone: [{ required: true, message: '请输入会员手机号', trigger: 'blur' }],
 }
 
-// 预计金额(简单按 60 分钟 50 元估算)
+// 预计金额：按所选场地 + 时段的网格价格计算（分）
 const proxyAmount = computed(() => {
   if (!proxyForm.startTime || !proxyForm.endTime) return 0
   const start = dayjs(`2000-01-01 ${proxyForm.startTime}`)
   const end = dayjs(`2000-01-01 ${proxyForm.endTime}`)
   const minutes = end.diff(start, 'minute')
   if (minutes <= 0) return 0
-  return Math.round((minutes / 60) * 5000)
+
+  // 从网格中取该场地覆盖时段的规则价格
+  const row = gridRows.value.find((r) => r.court.id === proxyForm.courtId)
+  if (!row) return 0
+  const slot = row.slots.find((s) => s.startTime === proxyForm.startTime)
+  if (!slot || slot.price == null) return 0
+
+  // RANGE 整段一口价：直接取整段价格
+  if (slot.rangeKey) return slot.price
+
+  // HOURLY：按小时价格 × 时长
+  return Math.round((minutes / 60) * slot.price)
 })
 
 function openProxyBooking(court?: Court, slot?: TimeSlot) {
@@ -688,6 +707,13 @@ onMounted(() => {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      .slot-price {
+        display: block;
+        padding: 4px;
+        font-size: 12px;
+        color: #0284c7;
+        font-weight: 500;
       }
     }
   }

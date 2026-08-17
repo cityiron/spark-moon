@@ -66,6 +66,32 @@ type MockContext = {
 }
 type MockHandler = (ctx: MockContext) => Result
 
+/** 生成 mock 时段列表（含价格，与后端 TimeSlotVO 结构一致） */
+function buildMockSlots(dayPrice: number, peakPrice: number, start = '09:00', end = '22:00') {
+  const slots: Array<{
+    label: string
+    startTime: string
+    endTime: string
+    status: string
+    price?: number
+    rangeKey?: string
+  }> = []
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh] = end.split(':').map(Number)
+  for (let h = sh; h < eh; h++) {
+    const s = `${String(h).padStart(2, '0')}:00`
+    const e = `${String(h + 1).padStart(2, '0')}:00`
+    slots.push({
+      label: s,
+      startTime: s,
+      endTime: e,
+      status: 'free',
+      price: h >= 18 ? peakPrice : dayPrice,
+    })
+  }
+  return slots
+}
+
 const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
   // 发送短信验证码
   {
@@ -248,16 +274,20 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
   {
     match: /GET\s+\/booking\/grid/,
     handler: () => ({
-      code: 0, message: 'ok', data: {
-        date: '2026-08-06',
-        timeSlots: ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'],
-        courts: [
-          { id: 101, name: '1 号场', type: 'badminton', indoor: true },
-          { id: 102, name: '2 号场', type: 'badminton', indoor: true },
-          { id: 103, name: '3 号场', type: 'badminton', indoor: true },
-        ],
-        grid: [],
-      },
+      code: 0, message: 'ok', data: [
+        {
+          court: { id: 101, name: '1 号场', type: 'badminton', indoor: true },
+          slots: buildMockSlots(4000, 6000, '09:00', '18:00'),
+        },
+        {
+          court: { id: 102, name: '2 号场', type: 'badminton', indoor: true },
+          slots: buildMockSlots(4000, 6000, '09:00', '18:00'),
+        },
+        {
+          court: { id: 103, name: '3 号场', type: 'badminton', indoor: true },
+          slots: buildMockSlots(4000, 6000, '09:00', '18:00'),
+        },
+      ],
     }),
   },
   { match: /POST\s+\/booking\/lock$/, handler: () => ({ code: 0, message: 'ok', data: null }) },

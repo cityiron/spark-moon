@@ -207,6 +207,10 @@ export interface TimeSlot {
   endTime: string
   /** 状态 */
   status: SlotStatus
+  /** RANGE 整段一口价时段标识 "HH:mm-HH:mm"，该时段整段不可拆分；非 RANGE 为 undefined */
+  rangeKey?: string
+  /** 本时段价格(分)：HOURLY 为单小时价格，RANGE 为整段一口价；无价格配置为 undefined */
+  price?: number
   /** 关联订单(若已预订) */
   order?: BookingOrder
 }
