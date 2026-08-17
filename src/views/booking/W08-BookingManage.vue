@@ -78,10 +78,10 @@
                   </a-tag>
                 </td>
                 <td
-                  v-for="slot in row.slots"
+                  v-for="(slot, si) in row.slots"
                   :key="slot.label"
                   class="slot-cell"
-                  :class="slotClass(slot)"
+                  :class="[slotClass(slot), slot.rangeKey ? 'slot-range' : '', slot.rangeKey && isRangeStart(row.slots, si) ? 'slot-range-start' : '']"
                   @click="onCellClick(row, slot)"
                 >
                   <a-tooltip v-if="slot.order" :title="orderTooltip(slot.order)">
@@ -89,8 +89,11 @@
                   </a-tooltip>
                   <span v-else-if="slot.status === 'locked'" class="slot-text">锁定</span>
                   <span v-else-if="slot.status === 'training'" class="slot-text">培训</span>
+                  <span v-else-if="slot.rangeKey" class="slot-range-label">
+                    {{ isRangeStart(row.slots, si) ? `整段 ¥${fmtPrice(slot.price)}` : '↔' }}
+                  </span>
                   <span v-else class="slot-price">
-                    {{ slot.rangeKey ? `${fmtPrice(slot.price)}/整段` : `¥${fmtPrice(slot.price)}` }}
+                    ¥{{ fmtPrice(slot.price) }}
                   </span>
                 </td>
               </tr>
@@ -131,29 +134,36 @@
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="开始时间" name="startTime">
-              <a-time-picker
+              <a-select
                 v-model:value="proxyForm.startTime"
-                format="HH:mm"
-                value-format="HH:mm"
+                :options="proxyStartOptions.map((t) => ({ label: t, value: t }))"
+                placeholder="选择开始时间"
                 style="width: 100%"
-                :minute-step="60"
-                placeholder="09:00"
+                :disabled="!proxyForm.courtId"
+                @change="onStartTimeChange"
               />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="结束时间" name="endTime">
-              <a-time-picker
+              <a-select
                 v-model:value="proxyForm.endTime"
-                format="HH:mm"
-                value-format="HH:mm"
+                :options="proxyEndOptions.map((t) => ({ label: t, value: t }))"
+                placeholder="选择结束时间"
                 style="width: 100%"
-                :minute-step="60"
-                placeholder="10:00"
+                :disabled="!proxyForm.courtId"
+                @change="onEndTimeChange"
               />
             </a-form-item>
           </a-col>
         </a-row>
+        <a-alert
+          v-if="rangeInfoText"
+          :message="rangeInfoText"
+          type="warning"
+          show-icon
+          style="margin-bottom: 16px"
+        />
         <a-form-item label="会员手机号" name="memberPhone">
           <a-input v-model:value="proxyForm.memberPhone" placeholder="输入会员手机号查询" />
         </a-form-item>
@@ -439,6 +449,14 @@ function fmtPrice(cents?: number): string {
   return (cents / 100).toFixed(0)
 }
 
+/** 判断某格是否为 RANGE 段的起始格 */
+function isRangeStart(slots: TimeSlot[], index: number): boolean {
+  const slot = slots[index]
+  if (!slot?.rangeKey) return false
+  const prev = slots[index - 1]
+  return !prev || prev.rangeKey !== slot.rangeKey
+}
+
 function statusColor(s: BookingStatus): string {
   const map: Record<BookingStatus, string> = {
     pending: 'orange',
@@ -473,7 +491,61 @@ const proxyRules = {
   memberPhone: [{ required: true, message: '请输入会员手机号', trigger: 'blur' }],
 }
 
-// 预计金额：按所选场地 + 时段的网格价格计算（分）
+/** 当前选中场地可选的开始时间（仅段边界：RANGE 段只能从段首开始，HOURLY 每格皆可） */
+const proxyStartOptions = computed<string[]>(() => {
+  const row = gridRows.value.find((r) => r.court.id === proxyForm.courtId)
+  if (!row) return []
+  return row.slots
+    .map((s, i) => (s.rangeKey ? (isRangeStart(row.slots, i) ? s.startTime : null) : s.startTime))
+    .filter((t): t is string => !!t)
+})
+
+/** 当前选中场地可选的结束时间（仅段边界：RANGE 段只能在该段结束时结束，HOURLY 每格皆可） */
+const proxyEndOptions = computed<string[]>(() => {
+  const row = gridRows.value.find((r) => r.court.id === proxyForm.courtId)
+  if (!row) return []
+  const slots = row.slots
+  const ends: string[] = []
+  slots.forEach((s, i) => {
+    if (proxyForm.startTime && s.startTime <= proxyForm.startTime) return
+    // 非 RANGE：每格都可作为结束
+    if (!s.rangeKey) {
+      if (s.endTime) ends.push(s.endTime)
+      return
+    }
+    // RANGE 段：仅当是段内最后一格（下一格不是同一段）才可作为结束
+    const next = slots[i + 1]
+    if (!next || next.rangeKey !== s.rangeKey) {
+      if (s.endTime) ends.push(s.endTime)
+    }
+  })
+  return ends
+})
+
+/** 时段选择的提示文案（RANGE 整段不可拆分） */
+const rangeInfoText = computed(() => {
+  const row = gridRows.value.find((r) => r.court.id === proxyForm.courtId)
+  if (!row) return ''
+  const hasRange = row.slots.some((s) => s.rangeKey)
+  return hasRange ? '注意：标有"整段"的时段为整段一口价出售，不可拆分，需按整段边界选择' : ''
+})
+
+function onStartTimeChange() {
+  // 开始时间变化后，若已选结束时间不在边界内则清空
+  if (proxyForm.endTime && !proxyEndOptions.value.includes(proxyForm.endTime)) {
+    proxyForm.endTime = ''
+  }
+}
+
+function onEndTimeChange() {
+  // 结束时间变化后，若开始时间晚于结束则清空开始
+  if (proxyForm.startTime && proxyForm.endTime && proxyForm.startTime >= proxyForm.endTime) {
+    proxyForm.startTime = ''
+  }
+}
+
+// 预计金额：按所选场地 + 时段累加网格价格计算（分）。
+// RANGE 整段一口价按 rangeKey 去重取整段价，HOURLY 按小时价 × 时长；支持跨多个 RANGE 段累加。
 const proxyAmount = computed(() => {
   if (!proxyForm.startTime || !proxyForm.endTime) return 0
   const start = dayjs(`2000-01-01 ${proxyForm.startTime}`)
@@ -481,26 +553,58 @@ const proxyAmount = computed(() => {
   const minutes = end.diff(start, 'minute')
   if (minutes <= 0) return 0
 
-  // 从网格中取该场地覆盖时段的规则价格
   const row = gridRows.value.find((r) => r.court.id === proxyForm.courtId)
   if (!row) return 0
-  const slot = row.slots.find((s) => s.startTime === proxyForm.startTime)
-  if (!slot || slot.price == null) return 0
 
-  // RANGE 整段一口价：直接取整段价格
-  if (slot.rangeKey) return slot.price
-
-  // HOURLY：按小时价格 × 时长
-  return Math.round((minutes / 60) * slot.price)
+  const rangeKeys = new Set<string>()
+  let total = 0
+  for (const slot of row.slots) {
+    if (!slot.startTime || !slot.endTime) continue
+    if (slot.startTime < proxyForm.startTime || slot.startTime >= proxyForm.endTime) continue
+    if (slot.price == null) continue
+    if (slot.rangeKey) {
+      // RANGE 段：整段只计一次
+      if (rangeKeys.has(slot.rangeKey)) continue
+      rangeKeys.add(slot.rangeKey)
+      total += slot.price
+    } else {
+      // HOURLY：按小时价 × 覆盖时长
+      const s = dayjs(`2000-01-01 ${slot.startTime}`)
+      const e = dayjs(`2000-01-01 ${slot.endTime}`)
+      const covered = Math.min(e, end).diff(Math.max(s, start), 'minute')
+      total += Math.round((covered / 60) * slot.price)
+    }
+  }
+  return total
 })
 
 function openProxyBooking(court?: Court, slot?: TimeSlot) {
+  let start = slot?.startTime || ''
+  let end = slot?.endTime || ''
+  // RANGE 整段：点击段内任一格，预填该段整段范围
+  if (court && slot?.rangeKey) {
+    const row = gridRows.value.find((r) => r.court.id === court.id)
+    if (row) {
+      const idx = row.slots.findIndex((s) => s.label === slot.label)
+      if (idx >= 0 && isRangeStart(row.slots, idx)) {
+        start = slot.startTime
+        end = slot.endTime
+      } else {
+        // 段内格子：向前找到段首，向后找到段尾
+        const rangeSlots = row.slots.filter((s) => s.rangeKey === slot.rangeKey)
+        if (rangeSlots.length > 0) {
+          start = rangeSlots[0].startTime
+          end = rangeSlots[rangeSlots.length - 1].endTime
+        }
+      }
+    }
+  }
   Object.assign(proxyForm, {
     venueId: selectedVenueId.value,
     courtId: court?.id,
     date: selectedDate.value,
-    startTime: slot?.startTime || '',
-    endTime: slot?.endTime || '',
+    startTime: start,
+    endTime: end,
     memberPhone: '',
     memberName: '',
     remark: '',
@@ -719,6 +823,20 @@ onMounted(() => {
         font-size: 12px;
         color: #0284c7;
         font-weight: 500;
+      }
+      .slot-range-label {
+        display: block;
+        padding: 4px;
+        font-size: 12px;
+        color: #b45309;
+        font-weight: 600;
+      }
+    }
+    // RANGE 整段一口价段：整段用同一底色 + 段首左边框标识
+    .slot-range {
+      background: #fef3c7;
+      &.slot-range-start {
+        box-shadow: inset 3px 0 0 #f59e0b;
       }
     }
   }
