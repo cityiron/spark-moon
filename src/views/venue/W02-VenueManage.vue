@@ -81,6 +81,17 @@
                 </a-col>
               </a-row>
 
+              <a-form-item label="接受平台会员卡" name="acceptPlatformCard">
+                <a-switch
+                  v-model:checked="venueForm.acceptPlatformCard"
+                  :checked-value="1"
+                  :un-checked-value="0"
+                  checked-children="接受"
+                  un-checked-children="不接受"
+                />
+                <div class="hint-text">开启后，该球馆的顾客可使用平台会员卡享受权益</div>
+              </a-form-item>
+
               <a-form-item label="球馆图片（最多 5 张）">
                 <a-upload
                   v-model:file-list="imageFileList"
@@ -643,6 +654,7 @@ const venueForm = reactive<Partial<Venue>>({
   traffic: '',
   facilities: [],
   status: 1,
+  acceptPlatformCard: 0,
 })
 const venueRules = {
   name: [{ required: true, message: '请输入球馆名称', trigger: 'blur' }],
@@ -673,6 +685,7 @@ async function loadVenueDetail() {
       traffic: detail.traffic || '',
       facilities: [...(detail.facilities || [])],
       status: detail.status,
+      acceptPlatformCard: detail.acceptPlatformCard ?? 0,
     })
     // 同步加载场地与价格
     loadCourts()
@@ -704,6 +717,7 @@ async function saveVenueInfo() {
       openTime: venueForm.openTime,
       closeTime: venueForm.closeTime,
       intro: venueForm.intro,
+      acceptPlatformCard: venueForm.acceptPlatformCard,
     })
     message.success('基本信息已保存')
   } finally {

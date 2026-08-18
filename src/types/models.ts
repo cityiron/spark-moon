@@ -42,6 +42,8 @@ export interface Venue {
   courtCount: number
   /** 状态: 1 营业 0 停业 */
   status: StatusEnum
+  /** 是否接受平台会员卡: 1 接受 0 不接受 */
+  acceptPlatformCard?: number
   /** 备注 */
   remark?: string
   /** 创建时间 */
