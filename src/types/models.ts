@@ -347,6 +347,8 @@ export interface VipPlan {
   price: number
   /** 有效期(月) */
   durationMonths: number
+  /** 卡类型: platform 平台卡 / venue 球馆卡 */
+  planType?: 'platform' | 'venue'
   status: VipPlanStatus
   /** 各球馆折扣配置 (折扣率 0.1-1.0, 未配置视为不享受折扣) */
   venueDiscounts?: Array<{ venueId: number, venueName?: string, discountRate: number }>

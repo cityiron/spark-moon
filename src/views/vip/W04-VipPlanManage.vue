@@ -33,7 +33,12 @@
           <a-col v-for="plan in planList" :key="plan.id" :span="8">
             <a-card class="plan-card" :bordered="true">
               <div class="plan-card-header">
-                <div class="plan-name">{{ plan.name }}</div>
+                <div class="plan-name">
+                  {{ plan.name }}
+                  <a-tag :color="plan.planType === 'platform' ? 'purple' : 'blue'" style="margin-left: 6px">
+                    {{ plan.planType === 'platform' ? '平台卡' : '球馆卡' }}
+                  </a-tag>
+                </div>
                 <a-tag v-if="plan.status === 'active'" color="green">在架</a-tag>
                 <a-tag v-else color="default">下架</a-tag>
               </div>
@@ -55,7 +60,7 @@
                   <edit-outlined />
                   编辑
                 </a-button>
-                <a-button size="small" type="primary" ghost @click="openDiscountDrawer(plan)">
+                <a-button size="small" type="primary" ghost @click="message.info('折扣配置开发中')">
                   <thunderbolt-outlined />
                   配置折扣
                 </a-button>
@@ -127,6 +132,13 @@
       <a-form ref="planFormRef" :model="planForm" :rules="planRules" layout="vertical">
         <a-form-item label="套餐名称" name="name">
           <a-input v-model:value="planForm.name" placeholder="如 月度 VIP" />
+        </a-form-item>
+        <a-form-item label="卡类型" name="planType">
+          <a-radio-group v-model:value="planForm.planType" :disabled="isEdit">
+            <a-radio-button value="venue">球馆卡</a-radio-button>
+            <a-radio-button value="platform">平台卡</a-radio-button>
+          </a-radio-group>
+          <div class="form-tip">平台卡仅平台管理员可配置，全平台球馆通用（需球馆开通）</div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -378,11 +390,13 @@ const planFormRef = ref<FormInstance>()
 const editingPlanId = ref(0)
 const planForm = reactive<{
   name: string
+  planType: 'platform' | 'venue'
   price: number       // 元
   durationMonths: number
   status: VipPlanStatus
 }>({
   name: '',
+  planType: 'venue',
   price: 0,
   durationMonths: 1,
   status: 'active',
@@ -395,7 +409,7 @@ const planRules = {
 
 function openCreatePlan() {
   isEdit.value = false
-  Object.assign(planForm, { name: '', price: 0, durationMonths: 1, status: 'active' })
+  Object.assign(planForm, { name: '', planType: 'venue', price: 0, durationMonths: 1, status: 'active' })
   formModalOpen.value = true
 }
 function openEditPlan(plan: VipPlan) {
@@ -403,6 +417,7 @@ function openEditPlan(plan: VipPlan) {
   editingPlanId.value = plan.id
   Object.assign(planForm, {
     name: plan.name,
+    planType: plan.planType || 'venue',
     price: plan.price / 100,    // 分转元
     durationMonths: plan.durationMonths,
     status: plan.status,
@@ -415,6 +430,7 @@ async function submitPlan() {
   try {
     const payload = {
       name: planForm.name,
+      planType: planForm.planType,
       price: Math.round(planForm.price * 100),   // 元转分
       durationMonths: planForm.durationMonths,
       status: planForm.status,
@@ -688,5 +704,12 @@ onMounted(() => {
 
 .drawer-footer {
   text-align: right;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 </style>
