@@ -35,9 +35,7 @@
               <div class="plan-card-header">
                 <div class="plan-name">
                   {{ plan.name }}
-                  <a-tag :color="plan.planType === 'platform' ? 'purple' : 'blue'" style="margin-left: 6px">
-                    {{ plan.planType === 'platform' ? '平台卡' : '球馆卡' }}
-                  </a-tag>
+                  <a-tag color="blue" style="margin-left: 6px">球馆卡</a-tag>
                 </div>
                 <a-tag v-if="plan.status === 'active'" color="green">在架</a-tag>
                 <a-tag v-else color="default">下架</a-tag>
@@ -133,12 +131,9 @@
         <a-form-item label="套餐名称" name="name">
           <a-input v-model:value="planForm.name" placeholder="如 月度 VIP" />
         </a-form-item>
-        <a-form-item label="卡类型" name="planType">
-          <a-radio-group v-model:value="planForm.planType" :disabled="isEdit">
-            <a-radio-button value="venue">球馆卡</a-radio-button>
-            <a-radio-button value="platform">平台卡</a-radio-button>
-          </a-radio-group>
-          <div class="form-tip">平台卡仅平台管理员可配置，全平台球馆通用（需球馆开通）</div>
+        <a-form-item label="卡类型">
+          <a-tag color="blue">球馆卡</a-tag>
+          <div class="form-tip">球馆卡由本俱乐部维护；平台卡请在「平台会员卡」菜单中配置</div>
         </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
@@ -332,7 +327,7 @@ const {
   handleTableChange: handleMembershipTableChange,
 } = useTable<VipMembershipQuery, VipMembership>({
   fetchApi: getVipMemberships,
-  initialQuery: { vipPlanId: undefined, status: undefined },
+  initialQuery: { vipPlanId: undefined, status: undefined, planType: 'venue' },
 })
 
 const filterPlanId = ref<number | undefined>(undefined)
@@ -355,7 +350,7 @@ const planList = ref<VipPlan[]>([])
 async function loadPlanList() {
   planLoading.value = true
   try {
-    const res = await getVipPlanList({ page: 1, size: 100 })
+    const res = await getVipPlanList({ page: 1, size: 100, planType: 'venue' })
     planList.value = res.list || []
   } catch {
     planList.value = []
@@ -390,13 +385,11 @@ const planFormRef = ref<FormInstance>()
 const editingPlanId = ref(0)
 const planForm = reactive<{
   name: string
-  planType: 'platform' | 'venue'
   price: number       // 元
   durationMonths: number
   status: VipPlanStatus
 }>({
   name: '',
-  planType: 'venue',
   price: 0,
   durationMonths: 1,
   status: 'active',
@@ -409,7 +402,7 @@ const planRules = {
 
 function openCreatePlan() {
   isEdit.value = false
-  Object.assign(planForm, { name: '', planType: 'venue', price: 0, durationMonths: 1, status: 'active' })
+  Object.assign(planForm, { name: '', price: 0, durationMonths: 1, status: 'active' })
   formModalOpen.value = true
 }
 function openEditPlan(plan: VipPlan) {
@@ -417,7 +410,6 @@ function openEditPlan(plan: VipPlan) {
   editingPlanId.value = plan.id
   Object.assign(planForm, {
     name: plan.name,
-    planType: plan.planType || 'venue',
     price: plan.price / 100,    // 分转元
     durationMonths: plan.durationMonths,
     status: plan.status,
@@ -430,7 +422,7 @@ async function submitPlan() {
   try {
     const payload = {
       name: planForm.name,
-      planType: planForm.planType,
+      planType: 'venue' as const,
       price: Math.round(planForm.price * 100),   // 元转分
       durationMonths: planForm.durationMonths,
       status: planForm.status,

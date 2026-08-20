@@ -14,6 +14,8 @@ export interface MemberQuery extends PageQuery {
   keyword?: string
   cardType?: string
   cardStatus?: string
+  /** 俱乐部(经营者) id，平台角色可传以切换俱乐部 */
+  operatorId?: number
 }
 
 /** 后端 MemberVO → 前端 Member 归一化（cardType 大写转小写、金额缺省补0） */
@@ -50,10 +52,11 @@ export async function getMemberList(params: MemberQuery) {
 }
 
 /** 会员统计 */
-export function getMemberStats() {
+export function getMemberStats(operatorId?: number) {
   return request<MemberStats>({
     url: '/member/stats',
     method: 'get',
+    params: operatorId ? { operatorId } : undefined,
   })
 }
 
@@ -81,6 +84,7 @@ function toSaveRequest(data: Partial<Member>): Record<string, any> {
     initAmount: extra.initAmount ?? data.balance ?? undefined,
     initTimes: extra.initTimes ?? undefined,
     status: data.status,
+    operatorId: data.operatorId,
   }
 }
 

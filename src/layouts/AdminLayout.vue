@@ -100,6 +100,7 @@ import {
   ReadOutlined,
   ScheduleOutlined,
   WalletOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons-vue'
 import type { ItemType } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -145,6 +146,11 @@ const menuItems = computed<ItemType[]>(() => {
       key: '/member',
       icon: () => h(UserOutlined),
       label: '会员管理',
+    },
+    {
+      key: '/platform-card',
+      icon: () => h(IdcardOutlined),
+      label: '平台会员卡',
     },
     {
       key: '/vip',

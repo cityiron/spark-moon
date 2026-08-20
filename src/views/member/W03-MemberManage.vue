@@ -24,6 +24,18 @@
       <!-- 搜索栏 -->
       <div class="table-toolbar">
         <div class="table-toolbar-left">
+          <a-select
+            v-if="isPlatformRole"
+            v-model:value="searchOperatorId"
+            placeholder="全部俱乐部"
+            style="width: 200px"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="clubOptions"
+            :loading="clubLoading"
+            @change="handleSearch"
+          />
           <a-input-search
             v-model:value="searchKeyword"
             placeholder="姓名 / 手机号 / 卡号"
@@ -75,6 +87,10 @@
                 <div class="sub-text">{{ record.phone }}</div>
               </div>
             </a-space>
+          </template>
+          <template v-else-if="column.dataIndex === 'operatorName'">
+            <span v-if="record.operatorName">{{ record.operatorName }}</span>
+            <span v-else class="text-muted">-</span>
           </template>
           <template v-else-if="column.dataIndex === 'cardType'">
             <a-tag :color="cardTypeColor(record.cardType)">{{ cardTypeLabel(record.cardType) }}</a-tag>
@@ -478,6 +494,8 @@ import {
   getMemberTransactions,
   type MemberQuery,
 } from '@/api/member'
+import { getOperatorList } from '@/api/operator'
+import { useAuthStore } from '@/stores/auth'
 import { useTable } from '@/composables/useTable'
 import type {
   Member,
@@ -487,6 +505,35 @@ import type {
   CardTransaction,
   TransactionType,
 } from '@/types/models'
+
+// ===== 当前角色 & 俱乐部 =====
+const authStore = useAuthStore()
+/** 平台角色: 超管/管理员可切换俱乐部查看；经营者固定自己俱乐部（后端强制） */
+const isPlatformRole = computed(
+  () => authStore.roles.includes('super_admin') || authStore.roles.includes('admin'),
+)
+const clubOptions = ref<{ label: string, value: number }[]>([])
+const clubLoading = ref(false)
+const searchOperatorId = ref<number | undefined>(undefined)
+
+async function loadClubs() {
+  if (!isPlatformRole.value) return
+  clubLoading.value = true
+  try {
+    const res = await getOperatorList({ page: 1, size: 100, status: 'approved' })
+    clubOptions.value = (res.list || []).map((o) => ({
+      label: o.companyName || `俱乐部 #${o.id}`,
+      value: o.id,
+    }))
+  } catch {
+    clubOptions.value = []
+  } finally {
+    clubLoading.value = false
+  }
+}
+
+/** 当前生效的俱乐部过滤（经营者不传，后端强制自己） */
+const currentOperatorId = computed(() => (isPlatformRole.value ? searchOperatorId.value : undefined))
 
 // ===== 工具 =====
 /** 分转元, 保留两位小数 */
@@ -610,7 +657,7 @@ const statsLoading = ref(false)
 async function loadStats() {
   statsLoading.value = true
   try {
-    const data = await getMemberStats()
+    const data = await getMemberStats(currentOperatorId.value)
     Object.assign(stats, data)
   } catch {
     // 静默失败, 保持 0
@@ -628,13 +675,17 @@ function handleSearch() {
   queryParams.keyword = searchKeyword.value || undefined
   queryParams.cardType = searchCardType.value
   queryParams.cardStatus = searchCardStatus.value
+  queryParams.operatorId = currentOperatorId.value
   refresh()
+  loadStats()
 }
 function handleReset() {
   searchKeyword.value = ''
   searchCardType.value = undefined
   searchCardStatus.value = undefined
+  searchOperatorId.value = undefined
   resetQuery()
+  loadStats()
 }
 
 // ===== 列表 =====
@@ -659,7 +710,7 @@ const {
   handleTableChange,
 } = useTable<MemberQuery, Member>({
   fetchApi: getMemberList,
-  initialQuery: { keyword: '', cardType: undefined, cardStatus: undefined },
+  initialQuery: { keyword: '', cardType: undefined, cardStatus: undefined, operatorId: undefined },
 })
 
 // ===== 新增/编辑 =====
@@ -1007,6 +1058,7 @@ async function openTransactions(record: Member) {
 }
 
 // 初始化加载
+loadClubs()
 loadMemberList()
 loadStats()
 </script>

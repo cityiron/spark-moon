@@ -46,6 +46,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '会员管理', icon: 'TeamOutlined' },
       },
       {
+        path: 'platform-card',
+        name: 'PlatformCardManage',
+        component: () => import('@/views/member/PlatformCardManage.vue'),
+        meta: { title: '平台会员卡', icon: 'IdcardOutlined' },
+      },
+      {
         path: 'vip',
         name: 'VipPlanManage',
         component: () => import('@/views/vip/W04-VipPlanManage.vue'),
@@ -90,13 +96,14 @@ const WHITE_LIST = ['/login']
 
 // ==================== 菜单角色权限表 ====================
 // key: 菜单路径 → 可访问角色 (与 AdminLayout 菜单一致)
-// 经营者(operator)仅可访问球馆管理 / 场地预订
+// 经营者(operator)可访问球馆管理 / 场地预订 / 会员管理(仅自己俱乐部数据)
 export const ROLE_MENUS: Record<string, string[]> = {
   '/operator': ['super_admin'], // 账号管理: 仅平台超管
   '/venue': ['super_admin', 'operator', 'admin'], // 球馆管理
   '/booking': ['super_admin', 'operator', 'admin', 'staff'], // 场地预订
-  '/member': ['super_admin', 'admin', 'staff'], // 会员管理
-  '/vip': ['super_admin', 'admin'], // VIP 权益配置
+  '/member': ['super_admin', 'admin', 'staff', 'operator'], // 会员管理（俱乐部视角）
+  '/platform-card': ['super_admin', 'admin'], // 平台会员卡: 平台维护
+  '/vip': ['super_admin', 'admin'], // VIP 权益配置（球馆卡）
   '/training': ['super_admin', 'admin', 'coach'], // 培训课程管理
   '/schedule': ['super_admin', 'admin', 'coach'], // 课时排课
   '/finance': ['super_admin', 'admin'], // 财务管理

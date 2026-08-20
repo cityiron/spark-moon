@@ -245,6 +245,12 @@ export interface Member {
   phone: string
   gender?: 'male' | 'female'
   avatar?: string
+  /** 卡片归属俱乐部(经营者) id */
+  operatorId?: number
+  /** 归属俱乐部名称 */
+  operatorName?: string
+  /** 用户状态: 1 正常 0 冻结 */
+  status?: number
   cardType: CardType
   cardNo: string
   /** 储值卡余额(分) */

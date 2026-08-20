@@ -11,12 +11,16 @@ import type {
 /** VIP 套餐查询参数 */
 export interface VipPlanQuery extends PageQuery {
   status?: VipPlanStatus
+  /** 卡类型: platform 平台卡 / venue 球馆卡 */
+  planType?: 'platform' | 'venue'
 }
 
 /** 已购 VIP 权益会员查询参数 */
 export interface VipMembershipQuery extends PageQuery {
   vipPlanId?: number
   status?: 'active' | 'expired'
+  /** 卡类型: platform 平台卡 / venue 球馆卡 */
+  planType?: 'platform' | 'venue'
 }
 
 /** 后端 VipPlanAdminVO → 前端 VipPlan 归一化 */
