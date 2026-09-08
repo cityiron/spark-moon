@@ -51,6 +51,7 @@
             :loading="appLoading"
             row-key="id"
             :pagination="appPagination"
+            :scroll="{ x: 1130 }"
             @change="onAppTableChange"
           >
             <template #bodyCell="{ column, record }">
@@ -129,6 +130,7 @@
             :loading="accLoading"
             row-key="id"
             :pagination="accPagination"
+            :scroll="{ x: 1180 }"
             @change="onAccTableChange"
           >
             <template #bodyCell="{ column, record }">
@@ -475,7 +477,7 @@ function openApproveModal(record: OperatorApplication) {
 const rejectVisible = ref(false)
 const rejectLoading = ref(false)
 const rejectReason = ref('')
-let rejectingId = 0
+let rejectingId: string | number = 0
 
 function openRejectModal(record: OperatorApplication) {
   rejectingId = record.id
@@ -506,7 +508,7 @@ async function confirmReject() {
 const mchVisible = ref(false)
 const mchLoading = ref(false)
 const mchForm = reactive({ mchId: '', apiKey: '', certKey: '' })
-let mchOperatorId = 0
+let mchOperatorId: string | number = 0
 
 function openMchModal(record: OperatorApplication) {
   mchOperatorId = record.id
@@ -557,13 +559,13 @@ const accountSaving = ref(false)
 const accountFormRef = ref<FormInstance>()
 const editingAccount = ref<AdminAccount | null>(null)
 const accountForm = reactive({
-  operatorId: undefined as number | undefined,
+  operatorId: undefined as string | number | undefined,
   username: '',
   nickname: '',
   phone: '',
   password: '',
   role: 'admin' as AdminRole,
-  venueIds: [] as number[],
+  venueIds: [] as (string | number)[],
 })
 
 const accountRules = {
@@ -579,9 +581,9 @@ const accountRules = {
 }
 
 // 经营者下拉选项 (从已通过的申请里取)
-const operatorOptions = ref<Array<{ value: number, label: string }>>([])
+const operatorOptions = ref<Array<{ value: string | number, label: string }>>([])
 // 球馆下拉 (按所选经营者过滤)
-const venueOptions = ref<Array<{ value: number, label: string }>>([])
+const venueOptions = ref<Array<{ value: string | number, label: string }>>([])
 
 async function loadOperatorOptions() {
   try {
@@ -595,7 +597,7 @@ async function loadOperatorOptions() {
   }
 }
 
-async function onOperatorChange(operatorId: number) {
+async function onOperatorChange(operatorId: string | number) {
   // 加载该经营者名下球馆
   try {
     const venues = await getAllVenues()

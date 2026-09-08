@@ -202,6 +202,7 @@
             :loading="expenseTable.loading.value"
             row-key="id"
             :pagination="expenseTable.pagination"
+            :scroll="{ x: 900 }"
             @change="expenseTable.handleTableChange"
           >
             <template #bodyCell="{ column, record }">
@@ -367,7 +368,7 @@ function categoryLabel(
 }
 
 // ===== 球馆下拉 =====
-const venueOptions = ref<{ label: string, value: number }[]>([])
+const venueOptions = ref<{ label: string, value: string | number }[]>([])
 async function loadVenues() {
   try {
     const list = await getAllVenues()
@@ -501,7 +502,7 @@ const detailColumns: TableColumnsType = [
 const detailFilter = reactive<{
   type?: FinanceEntryType
   category?: IncomeCategory | ExpenseCategory
-  venueId?: number
+  venueId?: string | number
 }>({
   type: undefined,
   category: undefined,
@@ -553,7 +554,7 @@ const expenseColumns: TableColumnsType = [
 
 const expenseFilter = reactive<{
   category?: ExpenseCategory
-  venueId?: number
+  venueId?: string | number
 }>({
   category: undefined,
   venueId: undefined,
@@ -580,14 +581,14 @@ function resetExpenseFilter() {
 // ===== 新增/编辑支出 =====
 const expenseModalOpen = ref(false)
 const expenseEditing = ref(false)
-const expenseEditingId = ref(0)
+const expenseEditingId = ref<string | number>(0)
 const expenseFormRef = ref<FormInstance>()
 const submitting = ref(false)
 const expenseForm = reactive<{
   recordDate: string
   category: ExpenseCategory
   amount: number
-  venueId?: number
+  venueId?: string | number
   operator: string
   remark: string
 }>({

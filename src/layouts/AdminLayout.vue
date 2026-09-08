@@ -74,7 +74,8 @@
       <a-layout-content class="admin-content">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" />
+            <!-- :key 保证路由切换时旧组件先完整卸载, 避免 transition 过程中对已销毁 DOM 做 patch 报 parentNode null -->
+            <component :is="Component" :key="route.path" />
           </transition>
         </router-view>
       </a-layout-content>
@@ -101,6 +102,9 @@ import {
   ScheduleOutlined,
   WalletOutlined,
   IdcardOutlined,
+  UsergroupAddOutlined,
+  ProfileOutlined,
+  FlagOutlined,
 } from '@ant-design/icons-vue'
 import type { ItemType } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -143,9 +147,19 @@ const menuItems = computed<ItemType[]>(() => {
       label: '场地预订',
     },
     {
+      key: '/orders',
+      icon: () => h(ProfileOutlined),
+      label: '订单管理',
+    },
+    {
       key: '/member',
       icon: () => h(UserOutlined),
       label: '会员管理',
+    },
+    {
+      key: '/friend',
+      icon: () => h(UsergroupAddOutlined),
+      label: '球友管理',
     },
     {
       key: '/platform-card',
@@ -155,7 +169,7 @@ const menuItems = computed<ItemType[]>(() => {
     {
       key: '/vip',
       icon: () => h(CrownOutlined),
-      label: 'VIP 权益配置',
+      label: '俱乐部会员卡',
     },
     {
       key: '/training',
@@ -168,12 +182,18 @@ const menuItems = computed<ItemType[]>(() => {
       label: '课时排课',
     },
     {
+      key: '/activity',
+      icon: () => h(FlagOutlined),
+      label: '活动管理',
+    },
+    {
       key: '/finance',
       icon: () => h(WalletOutlined),
       label: '财务管理',
     },
   ]
   return all.filter((item) => {
+    if (!item) return false
     const allowed = ROLE_MENUS[item.key as string]
     return !allowed || allowed.some((r) => authStore.roles.includes(r))
   })

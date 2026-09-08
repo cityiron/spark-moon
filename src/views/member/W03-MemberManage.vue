@@ -3,7 +3,7 @@
     <!-- 顶部统计卡（参照原型 W03 stats-row） -->
     <div class="stats-row">
       <div class="stat-card">
-        <div class="stat-label">持卡会员</div>
+        <div class="stat-label">会员总数</div>
         <div class="stat-value text-primary">{{ stats.totalMembers }}</div>
       </div>
       <div class="stat-card">
@@ -74,6 +74,7 @@
         :loading="loading"
         row-key="id"
         :pagination="pagination"
+        :scroll="{ x: 1150 }"
         @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
@@ -93,31 +94,44 @@
             <span v-else class="text-muted">-</span>
           </template>
           <template v-else-if="column.dataIndex === 'cardType'">
-            <a-tag :color="cardTypeColor(record.cardType)">{{ cardTypeLabel(record.cardType) }}</a-tag>
-            <div class="sub-text">{{ record.cardNo }}</div>
+            <a-tag v-if="!record.cardType">未办卡</a-tag>
+            <template v-else>
+              <a-tag :color="cardTypeColor(record.cardType)">{{ cardTypeLabel(record.cardType) }}</a-tag>
+              <div class="sub-text">{{ record.cardNo }}</div>
+            </template>
           </template>
           <template v-else-if="column.dataIndex === 'balanceOrTimes'">
-            <span v-if="record.cardType === 'stored_value'" class="balance-text">¥ {{ formatFen(record.balance) }}</span>
+            <span v-if="!record.cardType" class="text-muted">-</span>
+            <span v-else-if="record.cardType === 'stored_value'" class="balance-text">¥ {{ formatFen(record.balance) }}</span>
             <span v-else-if="record.cardType === 'times_card'">剩余 {{ record.remainingTimes ?? 0 }} 次</span>
             <span v-else class="text-muted">不限次</span>
           </template>
           <template v-else-if="column.dataIndex === 'expireDate'">
-            <span v-if="record.cardType === 'monthly_card'">{{ record.expireDate || '长期有效' }}</span>
+            <span v-if="!record.cardType" class="text-muted">-</span>
+            <span v-else-if="record.cardType === 'monthly_card'">{{ record.expireDate || '长期有效' }}</span>
             <span v-else-if="record.cardType === 'times_card'">{{ record.expireDate || '-' }}</span>
             <span v-else class="text-muted">长期有效</span>
           </template>
           <template v-else-if="column.dataIndex === 'cardStatus'">
-            <a-badge :status="cardStatusBadge(record.cardStatus, record)" :text="cardStatusLabel(record.cardStatus, record)" />
+            <span v-if="!record.cardType" class="text-muted">未办卡</span>
+            <a-badge v-else :status="cardStatusBadge(record.cardStatus, record)" :text="cardStatusLabel(record.cardStatus, record)" />
           </template>
           <template v-else-if="column.dataIndex === 'action'">
             <a-space>
-              <a @click="openRecharge(record)">充值</a>
-              <a-divider type="vertical" />
-              <a @click="openAdjust(record)">调整</a>
-              <a-divider type="vertical" />
-              <a @click="openTransactions(record)">流水</a>
-              <a-divider type="vertical" />
-              <a @click="openRefund(record)">退款</a>
+              <template v-if="record.cardType">
+                <a @click="openRecharge(record)">充值</a>
+                <a-divider type="vertical" />
+                <a @click="openAdjust(record)">调整</a>
+                <a-divider type="vertical" />
+                <a @click="openTransactions(record)">流水</a>
+                <a-divider type="vertical" />
+                <a @click="openRefund(record)">退款</a>
+              </template>
+              <template v-else>
+                <a @click="openTransactions(record)">流水</a>
+                <a-divider type="vertical" />
+                <a @click="openEdit(record)">办卡</a>
+              </template>
               <a-dropdown>
                 <a class="more-link">更多 <down-outlined /></a>
                 <template #overlay>
@@ -512,9 +526,9 @@ const authStore = useAuthStore()
 const isPlatformRole = computed(
   () => authStore.roles.includes('super_admin') || authStore.roles.includes('admin'),
 )
-const clubOptions = ref<{ label: string, value: number }[]>([])
+const clubOptions = ref<{ label: string, value: string | number }[]>([])
 const clubLoading = ref(false)
-const searchOperatorId = ref<number | undefined>(undefined)
+const searchOperatorId = ref<string | number | undefined>(undefined)
 
 async function loadClubs() {
   if (!isPlatformRole.value) return
@@ -718,7 +732,7 @@ const formModalOpen = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const memberFormRef = ref<FormInstance>()
-const editingId = ref(0)
+const editingId = ref<string | number>(0)
 const memberForm = reactive<Partial<Member> & { initAmount?: number, initTimes?: number }>({
   name: '',
   phone: '',
@@ -803,7 +817,7 @@ const rechargeModalOpen = ref(false)
 const rechargeFormRef = ref<FormInstance>()
 const currentMember = ref<Member | null>(null)
 const rechargeForm = reactive<{
-  memberId: number
+  memberId: string | number
   amount: number
   times: number
   giftAmount: number
@@ -888,7 +902,7 @@ async function submitRecharge() {
 const adjustModalOpen = ref(false)
 const adjustFormRef = ref<FormInstance>()
 const adjustForm = reactive<{
-  memberId: number
+  memberId: string | number
   amount: number
   times: number
   reason: string

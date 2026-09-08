@@ -52,6 +52,7 @@
         <span class="legend-item"><i class="dot dot-booked"></i>已预订</span>
         <span class="legend-item"><i class="dot dot-locked"></i>已锁定</span>
         <span class="legend-item"><i class="dot dot-training"></i>培训</span>
+        <span class="legend-item"><i class="dot dot-expired"></i>已结束</span>
       </div>
 
       <!-- 预订网格 -->
@@ -89,6 +90,7 @@
                   </a-tooltip>
                   <span v-else-if="slot.status === 'locked'" class="slot-text">锁定</span>
                   <span v-else-if="slot.status === 'training'" class="slot-text">培训</span>
+                  <span v-else-if="slot.status === 'expired'" class="slot-text">已结束</span>
                   <span v-else-if="slot.rangeKey" class="slot-range-label">
                     {{ isRangeStart(row.slots, si) ? `整段 ¥${fmtPrice(slot.price)}` : '↔' }}
                   </span>
@@ -304,12 +306,59 @@
       </a-descriptions>
       <div v-if="currentOrder" style="text-align: right; margin-top: 16px">
         <a-popconfirm
-          v-if="['pending', 'confirmed'].includes(currentOrder.status)"
-          title="确认取消该订单?"
+          v-if="['pending', 'paid'].includes(currentOrder.status)"
+          title="确认核销该订单？核销后订单将标记为已核销。"
+          @confirm="handleVerifyOrder"
+        >
+          <a-button type="primary" style="margin-right: 8px">核销</a-button>
+        </a-popconfirm>
+        <a-popconfirm
+          v-if="['pending', 'paid'].includes(currentOrder.status)"
+          title="确认取消该订单？取消后该时段将被释放。"
           @confirm="handleCancelOrder"
         >
           <a-button danger>取消订单</a-button>
         </a-popconfirm>
+      </div>
+    </a-modal>
+
+    <!-- 锁定详情 / 释放 -->
+    <a-modal
+      v-model:open="lockModalOpen"
+      title="场地锁定详情"
+      :footer="null"
+      width="460"
+      :destroy-on-close="true"
+    >
+      <a-descriptions v-if="currentLock" :column="1" bordered size="small">
+        <a-descriptions-item label="场地">{{ currentLock.courtName }}</a-descriptions-item>
+        <a-descriptions-item label="日期">{{ currentLock.date }}</a-descriptions-item>
+        <a-descriptions-item label="时段">{{ currentLock.time }}</a-descriptions-item>
+        <a-descriptions-item label="类型">
+          <a-tag :color="currentLock.lockStatus === 'training' ? 'purple' : 'orange'">
+            {{ currentLock.lockStatus === 'training' ? '培训占用' : '场地锁定' }}
+          </a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="原因">{{ currentLock.lockReason || '-' }}</a-descriptions-item>
+      </a-descriptions>
+      <div v-if="currentLock" style="margin-top: 16px">
+        <a-alert
+          v-if="currentLock.lockStatus === 'training'"
+          type="info"
+          show-icon
+          style="margin-bottom: 12px"
+          message="培训占用由排课自动锁定时，请到「排课管理」取消对应排课来释放；手动设置的培训占用可直接在此释放。"
+        />
+        <div style="text-align: right">
+          <a-popconfirm
+            title="确认释放该场地锁定? 释放后该时段恢复可预订"
+            ok-text="确认释放"
+            cancel-text="返回"
+            @confirm="handleReleaseLock"
+          >
+            <a-button type="primary" danger :loading="releasing">释放锁定</a-button>
+          </a-popconfirm>
+        </div>
       </div>
     </a-modal>
   </div>
@@ -327,12 +376,12 @@ import {
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getAllVenues } from '@/api/venue'
-import { getBookingGrid, proxyBooking, lockCourt, cancelBooking } from '@/api/booking'
-import type { Venue, Court, CourtGridRow, TimeSlot, BookingOrder, BookingStatus, LockRepeatType } from '@/types/models'
+import { getBookingGrid, proxyBooking, lockCourt, unlockCourt, adminCancelBooking, verifyBooking } from '@/api/booking'
+import type { Venue, Court, CourtGridRow, TimeSlot, BookingOrder, LockRepeatType } from '@/types/models'
 
 // ===== 场馆选择 =====
-const venueOptions = ref<{ label: string; value: number }[]>([])
-const selectedVenueId = ref<number>()
+const venueOptions = ref<{ label: string; value: string | number }[]>([])
+const selectedVenueId = ref<string | number>()
 const selectedDate = ref<string>(dayjs().format('YYYY-MM-DD'))
 
 async function loadVenues() {
@@ -415,32 +464,55 @@ function onCellClick(row: CourtGridRow, slot: TimeSlot) {
   if (slot.status === 'free') {
     // 空闲格子 -> 打开代客预订, 预填
     openProxyBooking(row.court, slot)
+  } else if (slot.status === 'expired') {
+    message.info('该时段已结束，无法预订')
   } else if (slot.order) {
     // 已预订 -> 显示订单详情
     currentOrder.value = slot.order
     orderModalOpen.value = true
   } else if (slot.status === 'locked' || slot.status === 'training') {
-    message.info(`该时段已${slot.status === 'training' ? '被培训占用' : '被锁定'}`)
+    if (slot.lockId) {
+      // 已锁定/培训 -> 显示锁定详情, 支持释放
+      currentLock.value = {
+        lockId: slot.lockId,
+        lockReason: slot.lockReason,
+        lockStatus: slot.status,
+        courtName: row.court.name,
+        date: selectedDate.value,
+        time: `${slot.startTime} - ${slot.endTime}`,
+      }
+      lockModalOpen.value = true
+    }
+    else {
+      message.info(`该时段已${slot.status === 'training' ? '被培训占用' : '被锁定'}`)
+    }
   }
 }
 
 async function handleCancelOrder() {
   if (!currentOrder.value) return
-  await cancelBooking(currentOrder.value.id)
+  await adminCancelBooking(currentOrder.value.id)
   message.success('订单已取消')
   orderModalOpen.value = false
   loadGrid()
 }
 
-// 状态映射
-function statusLabel(s: BookingStatus): string {
-  const map: Record<BookingStatus, string> = {
-    pending: '待确认',
-    confirmed: '已确认',
-    checked_in: '已入场',
-    completed: '已完成',
+async function handleVerifyOrder() {
+  if (!currentOrder.value) return
+  await verifyBooking(currentOrder.value.id)
+  message.success('订单已核销')
+  orderModalOpen.value = false
+  loadGrid()
+}
+
+// 状态映射（对应后端网格订单状态: pending/paid/verified/cancelled/absent）
+function statusLabel(s: string): string {
+  const map: Record<string, string> = {
+    pending: '待支付',
+    paid: '已支付',
+    verified: '已核销',
     cancelled: '已取消',
-    refunded: '已退款',
+    absent: '未到场',
   }
   return map[s] || s
 }
@@ -458,14 +530,13 @@ function isRangeStart(slots: TimeSlot[], index: number): boolean {
   return !prev || prev.rangeKey !== slot.rangeKey
 }
 
-function statusColor(s: BookingStatus): string {
-  const map: Record<BookingStatus, string> = {
+function statusColor(s: string): string {
+  const map: Record<string, string> = {
     pending: 'orange',
-    confirmed: 'green',
-    checked_in: 'blue',
-    completed: 'default',
+    paid: 'green',
+    verified: 'blue',
     cancelled: 'red',
-    refunded: 'purple',
+    absent: 'default',
   }
   return map[s] || 'default'
 }
@@ -572,7 +643,9 @@ const proxyAmount = computed(() => {
       // HOURLY：按小时价 × 覆盖时长
       const s = dayjs(`2000-01-01 ${slot.startTime}`)
       const e = dayjs(`2000-01-01 ${slot.endTime}`)
-      const covered = Math.min(e, end).diff(Math.max(s, start), 'minute')
+      const coveredStart = Math.max(s.valueOf(), start.valueOf())
+      const coveredEnd = Math.min(e.valueOf(), end.valueOf())
+      const covered = Math.max(0, (coveredEnd - coveredStart) / 60000)
       total += Math.round((covered / 60) * slot.price)
     }
   }
@@ -582,21 +655,14 @@ const proxyAmount = computed(() => {
 function openProxyBooking(court?: Court, slot?: TimeSlot) {
   let start = slot?.startTime || ''
   let end = slot?.endTime || ''
-  // RANGE 整段：点击段内任一格，预填该段整段范围
+  // RANGE 整段一口价：无论点击段内哪一格，都预填该整段的起止时间
   if (court && slot?.rangeKey) {
     const row = gridRows.value.find((r) => r.court.id === court.id)
     if (row) {
-      const idx = row.slots.findIndex((s) => s.label === slot.label)
-      if (idx >= 0 && isRangeStart(row.slots, idx)) {
-        start = slot.startTime
-        end = slot.endTime
-      } else {
-        // 段内格子：向前找到段首，向后找到段尾
-        const rangeSlots = row.slots.filter((s) => s.rangeKey === slot.rangeKey)
-        if (rangeSlots.length > 0) {
-          start = rangeSlots[0].startTime
-          end = rangeSlots[rangeSlots.length - 1].endTime
-        }
+      const rangeSlots = row.slots.filter((s) => s.rangeKey === slot.rangeKey)
+      if (rangeSlots.length > 0) {
+        start = rangeSlots[0].startTime
+        end = rangeSlots[rangeSlots.length - 1].endTime
       }
     }
   }
@@ -674,8 +740,8 @@ const lockDrawerOpen = ref(false)
 const lockFormRef = ref<FormInstance>()
 const lockForm = reactive({
   type: 'lock' as 'lock' | 'training',
-  courtId: undefined as number | undefined,
-  venueId: undefined as number | undefined,
+  courtId: undefined as string | number | undefined,
+  venueId: undefined as string | number | undefined,
   date: dayjs().format('YYYY-MM-DD'),
   startTime: '',
   endTime: '',
@@ -710,8 +776,8 @@ async function submitLock() {
   try {
     await lockCourt({
       ...lockForm,
-      venueId: selectedVenueId.value as number,
-      courtId: lockForm.courtId as number,
+      venueId: selectedVenueId.value!,
+      courtId: lockForm.courtId!,
       repeatType: lockForm.repeatType,
     })
     const repeatText = lockForm.repeatType === 'once' ? '' : `（${lockForm.repeatType === 'daily' ? '每天' : '每周'}重复）`
@@ -720,6 +786,32 @@ async function submitLock() {
     loadGrid()
   } finally {
     submitting.value = false
+  }
+}
+
+// ===== 释放锁定 =====
+interface LockDetail {
+  lockId: string | number
+  lockReason?: string
+  lockStatus: 'locked' | 'training'
+  courtName: string
+  date: string
+  time: string
+}
+const lockModalOpen = ref(false)
+const currentLock = ref<LockDetail | null>(null)
+const releasing = ref(false)
+
+async function handleReleaseLock() {
+  if (!currentLock.value) return
+  releasing.value = true
+  try {
+    await unlockCourt(currentLock.value.lockId)
+    message.success('场地锁定已释放，该时段恢复可预订')
+    lockModalOpen.value = false
+    loadGrid()
+  } finally {
+    releasing.value = false
   }
 }
 
@@ -775,6 +867,10 @@ onMounted(() => {
     }
     &.dot-training {
       background: #ede9fe;
+    }
+    &.dot-expired {
+      background: #f5f5f5;
+      border: 1px dashed #ccc;
     }
   }
 }
@@ -861,6 +957,15 @@ onMounted(() => {
         font-size: 12px;
         color: #b45309;
         font-weight: 600;
+      }
+    }
+    // 当天已结束时段: 灰显不可预订
+    .slot-expired {
+      background: #fafafa;
+      color: #bbb;
+      cursor: not-allowed;
+      .slot-text {
+        color: #bbb;
       }
     }
     // RANGE 整段一口价段：整段用同一底色 + 段首左边框标识

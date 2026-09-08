@@ -9,13 +9,19 @@ import type {
   MemberStats,
 } from '@/types/models'
 
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
+
 /** 会员查询参数 */
 export interface MemberQuery extends PageQuery {
   keyword?: string
   cardType?: string
   cardStatus?: string
   /** 俱乐部(经营者) id，平台角色可传以切换俱乐部 */
-  operatorId?: number
+  operatorId?: IdParam
 }
 
 /** 后端 MemberVO → 前端 Member 归一化（cardType 大写转小写、金额缺省补0） */
@@ -28,7 +34,7 @@ export function normalizeMember(raw: any): Member {
   return {
     ...raw,
     name: raw.name ?? raw.nickname ?? '',
-    cardType: raw.cardType ? (cardTypeMap[raw.cardType] || raw.cardType.toLowerCase()) : 'stored_value',
+    cardType: raw.cardType ? (cardTypeMap[raw.cardType] || raw.cardType.toLowerCase()) : undefined,
     cardNo: raw.cardNo ?? '',
     balance: raw.balance ?? 0,
     totalRecharge: raw.totalRecharge ?? 0,
@@ -52,7 +58,7 @@ export async function getMemberList(params: MemberQuery) {
 }
 
 /** 会员统计 */
-export function getMemberStats(operatorId?: number) {
+export function getMemberStats(operatorId?: IdParam) {
   return request<MemberStats>({
     url: '/member/stats',
     method: 'get',
@@ -61,7 +67,7 @@ export function getMemberStats(operatorId?: number) {
 }
 
 /** 会员详情 */
-export async function getMemberDetail(id: number) {
+export async function getMemberDetail(id: IdParam) {
   const res = await request<any>({
     url: `/member/${id}`,
     method: 'get',
@@ -98,7 +104,7 @@ export function createMember(data: Partial<Member>) {
 }
 
 /** 更新会员 */
-export function updateMember(id: number, data: Partial<Member>) {
+export function updateMember(id: IdParam, data: Partial<Member>) {
   return request<Member>({
     url: `/member/${id}`,
     method: 'put',
@@ -107,7 +113,7 @@ export function updateMember(id: number, data: Partial<Member>) {
 }
 
 /** 冻结/解冻会员卡: active->1, frozen->0 */
-export function toggleMemberStatus(id: number, status: string) {
+export function toggleMemberStatus(id: IdParam, status: string) {
   return request<void>({
     url: `/member/${id}/status`,
     method: 'patch',
@@ -143,7 +149,7 @@ export function refundMember(data: RefundParams) {
 }
 
 /** 会员卡交易记录 */
-export function getMemberTransactions(memberId: number, params?: PageQuery) {
+export function getMemberTransactions(memberId: IdParam, params?: PageQuery) {
   return request<PageResult<CardTransaction>>({
     url: `/member/${memberId}/transactions`,
     method: 'get',

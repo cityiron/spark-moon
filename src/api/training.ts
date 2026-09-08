@@ -9,6 +9,12 @@ import type {
   CourseStatus,
 } from '@/types/models'
 
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
+
 /** 课程查询参数 */
 export interface CourseQuery extends PageQuery {
   keyword?: string
@@ -48,7 +54,7 @@ export function createCourse(data: Partial<TrainingCourse>) {
 }
 
 /** 更新课程 */
-export function updateCourse(id: number, data: Partial<TrainingCourse>) {
+export function updateCourse(id: IdParam, data: Partial<TrainingCourse>) {
   return request<TrainingCourse>({
     url: `/training/course/${id}`,
     method: 'put',
@@ -57,7 +63,7 @@ export function updateCourse(id: number, data: Partial<TrainingCourse>) {
 }
 
 /** 上下架课程 (下架时若有未消课学员, API 返回 400) */
-export function toggleCourseStatus(id: number, status: CourseStatus) {
+export function toggleCourseStatus(id: IdParam, status: CourseStatus) {
   return request<void>({
     url: `/training/course/${id}/status`,
     method: 'patch',
@@ -66,7 +72,7 @@ export function toggleCourseStatus(id: number, status: CourseStatus) {
 }
 
 /** 删除课程 */
-export function deleteCourse(id: number) {
+export function deleteCourse(id: IdParam) {
   return request<void>({
     url: `/training/course/${id}`,
     method: 'delete',
@@ -92,7 +98,7 @@ export function createCoach(data: Partial<Coach>) {
 }
 
 /** 更新教练 */
-export function updateCoach(id: number, data: Partial<Coach>) {
+export function updateCoach(id: IdParam, data: Partial<Coach>) {
   return request<Coach>({
     url: `/training/coach/${id}`,
     method: 'put',
@@ -101,7 +107,7 @@ export function updateCoach(id: number, data: Partial<Coach>) {
 }
 
 /** 删除教练 */
-export function deleteCoach(id: number) {
+export function deleteCoach(id: IdParam) {
   return request<void>({
     url: `/training/coach/${id}`,
     method: 'delete',
@@ -109,7 +115,7 @@ export function deleteCoach(id: number) {
 }
 
 /** 课程报名学员(分页) */
-export function getCourseStudents(courseId: number, params?: PageQuery) {
+export function getCourseStudents(courseId: IdParam, params?: PageQuery) {
   return request<PageResult<CourseStudent>>({
     url: `/training/course/${courseId}/students`,
     method: 'get',

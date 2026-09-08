@@ -29,7 +29,7 @@ const DEMO_ACCOUNTS: Array<{
     roles: ['super_admin'],
   },
   {
-    username: 'lijg',
+    username: 'lijiangguo',
     password: '123456',
     phone: '13900139001',
     nickname: '李建国',
@@ -382,9 +382,9 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
       const all = [
         // id: 0 为平台内置超级管理员, 不可编辑/删除/禁用
         { id: 0, operatorId: 0, operatorName: '平台(内置)', username: 'admin', nickname: '超级管理员', phone: '13800138000', role: 'super_admin', venueIds: [], venueNames: [], status: 'active', createdAt: '系统初始化', lastLoginAt: '2026-08-06 09:30' },
-        { id: 1, operatorId: 1, operatorName: '深圳羽球体育文化有限公司', username: 'lijg', nickname: '李建国', phone: '13900139001', role: 'operator', venueIds: [1, 2], venueNames: ['羽球管家·高新园旗舰店', '羽球管家·后海分店'], status: 'active', createdAt: '2025-01-12 15:00', lastLoginAt: '2026-08-06 09:30' },
+        { id: 1, operatorId: 1, operatorName: '深圳羽球体育文化有限公司', username: 'lijiangguo', nickname: '李建国', phone: '13900139001', role: 'operator', venueIds: [1, 2], venueNames: ['羽球管家·高新园旗舰店', '羽球管家·后海分店'], status: 'active', createdAt: '2025-01-12 15:00', lastLoginAt: '2026-08-06 09:30' },
         { id: 2, operatorId: 1, operatorName: '深圳羽球体育文化有限公司', username: 'wanglihua', nickname: '王丽华', phone: '13900139002', role: 'admin', venueIds: [1], venueNames: ['羽球管家·高新园旗舰店'], status: 'active', createdAt: '2025-01-13 10:00', lastLoginAt: '2026-08-05 18:15' },
-        { id: 3, operatorId: 1, operatorName: '深圳羽球体育文化有限公司', username: 'lijie', nickname: '李教练', phone: '13900139001', role: 'coach', venueIds: [1], venueNames: ['羽球管家·高新园旗舰店'], status: 'active', createdAt: '2025-03-01 09:00', lastLoginAt: '2026-08-06 08:00' },
+        { id: 3, operatorId: 1, operatorName: '深圳羽球体育文化有限公司', username: 'lijie', nickname: '李教练', phone: '13900139004', role: 'coach', venueIds: [1], venueNames: ['羽球管家·高新园旗舰店'], status: 'active', createdAt: '2025-03-01 09:00', lastLoginAt: '2026-08-06 08:00' },
         { id: 4, operatorId: 2, operatorName: '后海运动管理有限公司', username: 'zhangming', nickname: '张明', phone: '13900139003', role: 'admin', venueIds: [2], venueNames: ['羽球管家·后海分店'], status: 'disabled', createdAt: '2025-02-07 11:00', lastLoginAt: '2026-07-15 14:20' },
       ]
       let list = all
@@ -504,7 +504,7 @@ const mockRoutes: Array<{ match: RegExp, handler: MockHandler }> = [
     match: /GET\s+\/training\/coaches$/,
     handler: () => ({
       code: 0, message: 'ok', data: [
-        { id: 1, name: '李教练', phone: '13900139001', specialty: '少儿启蒙 / 单打技术', sessionCount: 28 },
+        { id: 1, name: '李教练', phone: '13900139004', specialty: '少儿启蒙 / 单打技术', sessionCount: 28 },
         { id: 2, name: '王教练', phone: '13900139002', specialty: '成人基础 / 体能训练', sessionCount: 16 },
         { id: 3, name: '陈教练', phone: '13900139003', specialty: '双打战术 / 比赛指导', sessionCount: 12 },
       ],

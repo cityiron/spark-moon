@@ -10,6 +10,12 @@ import type {
 } from '@/types/models'
 
 // ==================== 入驻申请 ====================
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
+
 export interface OperatorQuery extends PageQuery {
   status?: string
   keyword?: string
@@ -45,7 +51,7 @@ export function getOperatorList(params: OperatorQuery) {
 }
 
 /** 申请详情 */
-export function getOperatorDetail(id: number) {
+export function getOperatorDetail(id: IdParam) {
   return request<OperatorApplication>({
     url: `/operator/${id}`,
     method: 'GET',
@@ -53,7 +59,7 @@ export function getOperatorDetail(id: number) {
 }
 
 /** 审核通过 */
-export function approveOperator(id: number) {
+export function approveOperator(id: IdParam) {
   return request({
     url: `/operator/${id}/approve`,
     method: 'POST',
@@ -61,7 +67,7 @@ export function approveOperator(id: number) {
 }
 
 /** 审核驳回 */
-export function rejectOperator(id: number, rejectReason: string) {
+export function rejectOperator(id: IdParam, rejectReason: string) {
   return request({
     url: `/operator/${id}/reject`,
     method: 'POST',
@@ -70,7 +76,7 @@ export function rejectOperator(id: number, rejectReason: string) {
 }
 
 /** 配置微信支付商户号 */
-export function configMch(id: number, params: MchConfigParams) {
+export function configMch(id: IdParam, params: MchConfigParams) {
   return request({
     url: `/operator/${id}/mch`,
     method: 'POST',
@@ -79,7 +85,7 @@ export function configMch(id: number, params: MchConfigParams) {
 }
 
 /** 商户号小额验证 */
-export function verifyMch(id: number) {
+export function verifyMch(id: IdParam) {
   return request({
     url: `/operator/${id}/mch/verify`,
     method: 'POST',
@@ -88,7 +94,7 @@ export function verifyMch(id: number) {
 
 // ==================== 账号管理 ====================
 export interface AccountQuery extends PageQuery {
-  operatorId?: number
+  operatorId?: IdParam
   role?: AdminRole
   status?: AccountStatus
   keyword?: string
@@ -105,13 +111,13 @@ export function getAccountList(params: AccountQuery) {
 
 /** 新建账号 */
 export function createAccount(data: {
-  operatorId: number
+  operatorId: IdParam
   username: string
   nickname: string
   phone: string
   password: string
   role: AdminRole
-  venueIds: number[]
+  venueIds: (string | number)[]
 }) {
   return request({
     url: '/operator/account',
@@ -121,12 +127,12 @@ export function createAccount(data: {
 }
 
 /** 编辑账号 */
-export function updateAccount(id: number, data: Partial<{
+export function updateAccount(id: IdParam, data: Partial<{
   nickname: string
   phone: string
   password?: string
   role: AdminRole
-  venueIds: number[]
+  venueIds: (string | number)[]
 }>) {
   return request({
     url: `/operator/account/${id}`,
@@ -136,7 +142,7 @@ export function updateAccount(id: number, data: Partial<{
 }
 
 /** 切换账号状态 (启用/禁用) */
-export function toggleAccountStatus(id: number) {
+export function toggleAccountStatus(id: IdParam) {
   return request({
     url: `/operator/account/${id}/status`,
     method: 'PATCH',
@@ -144,7 +150,7 @@ export function toggleAccountStatus(id: number) {
 }
 
 /** 删除账号 */
-export function deleteAccount(id: number) {
+export function deleteAccount(id: IdParam) {
   return request({
     url: `/operator/account/${id}`,
     method: 'DELETE',
@@ -152,7 +158,7 @@ export function deleteAccount(id: number) {
 }
 
 /** 重置账号密码 */
-export function resetPassword(id: number) {
+export function resetPassword(id: IdParam) {
   return request({
     url: `/operator/account/${id}/reset-password`,
     method: 'POST',

@@ -7,7 +7,8 @@ export type StatusEnum = 1 | 0
 
 /** 用户信息 */
 export interface UserInfo {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   username: string
   nickname: string
   avatar?: string
@@ -28,7 +29,8 @@ export type FacilityType =
 
 /** 场馆 */
 export interface Venue {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   name: string
   address: string
   phone: string
@@ -44,6 +46,10 @@ export interface Venue {
   status: StatusEnum
   /** 是否接受平台会员卡: 1 接受 0 不接受 */
   acceptPlatformCard?: number
+  /** 归属俱乐部(经营者)名称, /venue/all 返回 */
+  operatorName?: string
+  /** 平台卡折扣率(UI 编辑用, 0.8=8折) */
+  discountRate?: number | null
   /** 备注 */
   remark?: string
   /** 创建时间 */
@@ -71,8 +77,9 @@ export type CourtCategory = 'normal' | 'vip'
 
 /** 场地 */
 export interface Court {
-  id: number
-  venueId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
+  venueId: string | number
   name: string
   /** 场地类型 */
   type: CourtType
@@ -96,7 +103,8 @@ export type PriceGroupMatchType = 'default' | 'weekday' | 'weekend' | 'holiday' 
 
 /** 价格组内的时段规则 */
 export interface PriceRule {
-  id?: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
   /** 开始时间 HH:mm */
   startTime: string
   /** 结束时间 HH:mm */
@@ -114,8 +122,9 @@ export type CourtScope = 'all' | 'normal' | 'vip'
 
 /** 球馆价格组: 默认价/工作日/周末/节假日/自定义, 按 priority 从高到低匹配 */
 export interface PriceGroup {
-  id?: number
-  venueId?: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
+  venueId?: string | number
   /** 适用场地范围: all 全部 / normal 普通 / vip 贵宾 */
   courtScope?: CourtScope
   /** 组名, 如 默认价/工作日/周末/国庆 */
@@ -136,27 +145,27 @@ export interface PriceGroup {
   rules: PriceRule[]
 }
 
-/** 预订状态 */
+/** 预订状态(网格订单返回字符串: pending/paid/verified/cancelled/absent) */
 export type BookingStatus =
   | 'pending'
-  | 'confirmed'
-  | 'checked_in'
-  | 'completed'
+  | 'paid'
+  | 'verified'
   | 'cancelled'
-  | 'refunded'
+  | 'absent'
 
 /** 单元格占用类型(用于网格视图) */
-export type SlotStatus = 'free' | 'booked' | 'locked' | 'training'
+export type SlotStatus = 'free' | 'booked' | 'locked' | 'training' | 'expired'
 
 /** 预订订单 */
 export interface BookingOrder {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   orderNo: string
-  venueId: number
+  venueId: string | number
   venueName?: string
-  courtId: number
+  courtId: string | number
   courtName?: string
-  memberId?: number
+  memberId?: string | number
   memberName?: string
   memberPhone?: string
   /** 预订日期 YYYY-MM-DD */
@@ -188,9 +197,10 @@ export type LockRepeatType = 'once' | 'daily' | 'weekly'
 
 /** 场地锁定 */
 export interface CourtLock {
-  id?: number
-  courtId: number
-  venueId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
+  courtId: string | number
+  venueId: string | number
   /** 锁定日期 YYYY-MM-DD */
   date: string
   startTime: string
@@ -219,6 +229,10 @@ export interface TimeSlot {
   price?: number
   /** 关联订单(若已预订) */
   order?: BookingOrder
+  /** 关联锁定ID(仅 locked/training 有值, 雪花ID为字符串) */
+  lockId?: string | number
+  /** 锁定原因(仅 locked/training 有值) */
+  lockReason?: string
 }
 
 /** 场地网格行 */
@@ -240,13 +254,14 @@ export type CardStatus = 'active' | 'frozen' | 'expired' | 'disabled'
 
 /** 会员 */
 export interface Member {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   name: string
   phone: string
   gender?: 'male' | 'female'
   avatar?: string
   /** 卡片归属俱乐部(经营者) id */
-  operatorId?: number
+  operatorId?: string | number
   /** 归属俱乐部名称 */
   operatorName?: string
   /** 用户状态: 1 正常 0 冻结 */
@@ -281,8 +296,9 @@ export type TransactionType =
 
 /** 会员卡交易记录 */
 export interface CardTransaction {
-  id: number
-  memberId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
+  memberId: string | number
   type: TransactionType
   /** 变动金额(分), 正数为增加, 负数为扣减 */
   amount: number
@@ -300,7 +316,7 @@ export interface CardTransaction {
 
 /** 充值参数 */
 export interface RechargeParams {
-  memberId: number
+  memberId: string | number
   /** 充值金额(分) */
   amount: number
   /** 赠送金额(分) */
@@ -311,7 +327,7 @@ export interface RechargeParams {
 
 /** 余额调整参数 */
 export interface BalanceAdjustParams {
-  memberId: number
+  memberId: string | number
   /** 调整金额(分), 正数为增加, 负数为扣减 */
   amount: number
   /** 调整原因 */
@@ -321,7 +337,7 @@ export interface BalanceAdjustParams {
 
 /** 退款参数 */
 export interface RefundParams {
-  memberId: number
+  memberId: string | number
   /** 退款金额(分) */
   amount: number
   /** 退款方式: balance 退到会员卡余额, wechat 原路退回微信 */
@@ -343,12 +359,56 @@ export interface MemberStats {
   monthRecharge: number
 }
 
+/** 球友(小程序注册用户, 含未办卡) */
+export interface Friend {
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
+  nickname?: string
+  phone?: string
+  avatar?: string
+  /** 用户状态: 0 未绑定 1 正常 2 禁用 */
+  status?: number
+  createdAt?: string
+  lastLoginAt?: string
+  /** 是否持卡 */
+  hasCard: boolean
+  /** 持卡归属俱乐部 */
+  cardOperatorId?: string | number
+  cardOperatorName?: string
+  /** 主俱乐部(球友主动设置，归属俱乐部优先展示) */
+  mainOperatorId?: string | number
+  mainOperatorName?: string
+  /** 订场次数 */
+  bookingCount: number
+  /** 订场金额(分) */
+  bookingAmount: number
+  /** 最近订场时间 */
+  lastBookingAt?: string
+}
+
+/** 球友统计 */
+export interface FriendStats {
+  /** 球友总数 */
+  totalFriends: number
+  /** 本月新增 */
+  monthNew: number
+  /** 持卡会员数 */
+  memberCount: number
+  /** 有订场消费的球友数 */
+  consumedFriends: number
+  /** 订场总次数 */
+  totalBookings: number
+  /** 订场总金额(分) */
+  totalBookingAmount: number
+}
+
 // ==================== VIP 权益 ====================
 export type VipPlanStatus = 'active' | 'inactive'
 
 /** VIP 权益套餐 */
 export interface VipPlan {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   /** 套餐名称 */
   name: string
   /** 套餐价格(分) */
@@ -358,27 +418,70 @@ export interface VipPlan {
   /** 卡类型: platform 平台卡 / venue 球馆卡 */
   planType?: 'platform' | 'venue'
   status: VipPlanStatus
+  /** 卡种描述 */
+  description?: string
   /** 各球馆折扣配置 (折扣率 0.1-1.0, 未配置视为不享受折扣) */
-  venueDiscounts?: Array<{ venueId: number, venueName?: string, discountRate: number }>
+  venueDiscounts?: Array<{ venueId: string | number, venueName?: string, discountRate: number }>
   createdAt?: string
 }
 
 /** VIP 套餐球馆折扣配置 */
 export interface VipPlanVenue {
-  id?: number
-  vipPlanId: number
-  venueId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
+  vipPlanId: string | number
+  venueId: string | number
   /** 折扣率 0.10-1.00 (0.8 表示 8 折) */
   discountRate: number
 }
 
+/** 卡种级权益类型 */
+export type BenefitType =
+  | 'VENUE_DISCOUNT'
+  | 'TRAINING_DISCOUNT'
+  | 'FREE_SLOT'
+  | 'ACTIVITY_DISCOUNT'
+
+/** 卡种权益 (membership_vip_benefit) */
+export interface VipBenefit {
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
+  planId: string | number
+  /** 权益类型: VENUE_DISCOUNT / TRAINING_DISCOUNT / FREE_SLOT / ACTIVITY_DISCOUNT */
+  benefitType: BenefitType
+  /** 场地折扣按球馆配置时为球馆 ID, 其余为 null */
+  venueId?: string | number | null
+  venueName?: string
+  /** 折扣率 0.8=8折 (折扣类权益) */
+  discountRate?: number | null
+  /** 每月免费场次数 (仅 FREE_SLOT) */
+  freeSlots?: number | null
+  remark?: string
+}
+
+/** 储值等级折扣档位 (membership_recharge_tier) */
+export interface RechargeTier {
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id?: string | number
+  operatorId?: string | number
+  /** 档位名, 如 黄金会员 */
+  name?: string
+  /** 累计充值下限(元), 达到即命中 */
+  minRecharge: number
+  /** 折扣率 0.7=7折 */
+  discountRate: number
+  /** 1 启用 0 停用 */
+  status: 1 | 0
+}
+
 /** 已购 VIP 权益会员记录 */
 export interface VipMembership {
-  id: number
-  userId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
+  userId: string | number
   userName: string
   userPhone: string
-  vipPlanId: number
+  vipPlanId: string | number
   vipPlanName: string
   purchaseTime: string
   expireTime: string
@@ -391,25 +494,48 @@ export type CourseStatus = 'active' | 'inactive'
 
 /** 教练 */
 export interface Coach {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   name: string
   phone: string
   /** 专项 (如 "单打技术""双打战术""少儿启蒙") */
   specialty: string
+  /** 教龄(年) */
+  yearsOfExperience?: number
+  /** 履历 */
+  bio?: string
   /** 已排课节数 */
   sessionCount?: number
 }
 
 /** 培训课程 */
 export interface TrainingCourse {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   name: string
-  coachId: number
+  /** 教练 ID(雪花大整数) */
+  coachId: string | number
   coachName?: string
   /** 总课时 */
   totalSessions: number
-  /** 单价(分/课时) */
+  /** 单价(分/课时), 班课使用 */
   price: number
+  /** 私教 1V1 单价(分/课时/人) */
+  price1v1?: number
+  /** 私教 1V2 单价(分/课时/人) */
+  price1v2?: number
+  /** 班课最大人数 */
+  maxStudents?: number
+  /** 常驻球馆 ID(详情页展示) */
+  defaultVenueId?: string | number
+  /** 常驻球馆名称 */
+  venueName?: string
+  /** 所属俱乐部名称 */
+  operatorName?: string
+  /** 报名条件 */
+  requirement?: string
+  /** 课程大纲(每行一节, \n 分隔) */
+  outline?: string
   description: string
   courseType: CourseType
   status: CourseStatus
@@ -422,7 +548,8 @@ export interface TrainingCourse {
 
 /** 培训报名学员 */
 export interface CourseStudent {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   studentName: string
   studentPhone: string
   enrollTime: string
@@ -449,14 +576,15 @@ export type SessionStatus = 'scheduled' | 'consumed' | 'cancelled' | 'pending'
 
 /** 课时排课记录 */
 export interface TrainingSession {
-  id: number
-  courseId: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
+  courseId: string | number
   courseName?: string
-  venueId: number
+  venueId: string | number
   venueName?: string
-  courtId: number
+  courtId: string | number
   courtName?: string
-  coachId: number
+  coachId: string | number
   coachName?: string
   /** 课次编号 */
   sessionNo: number
@@ -473,21 +601,35 @@ export interface TrainingSession {
 
 /** 自动排课参数 */
 export interface AutoScheduleParams {
-  courseId: number
-  venueId: number
-  courtId: number
+  courseId: string | number
+  venueId: string | number
+  courtId: string | number
   /** 每周几次 */
   weeklyTimes: number
   /** 每周星期几 [1-7] */
   weekDays: number[]
   /** 起始日期 YYYY-MM-DD */
   startDate: string
-  /** 结束日期 YYYY-MM-DD */
-  endDate: string
+  /** 结束日期 YYYY-MM-DD (由总课时/每周次数自动推算, 只读展示) */
+  endDate?: string
+  /** 总课时(用于推算结束日期) */
+  totalSessions: number
   /** 默认开始时间 HH:mm */
   startTime: string
   /** 默认时长(分钟) */
   duration: number
+}
+
+/** 推算排课结束日期参数 */
+export interface CalcEndDateParams {
+  /** 每周几次 */
+  weeklyTimes: number
+  /** 每周星期几 [1-7] */
+  weekDays: number[]
+  /** 起始日期 YYYY-MM-DD */
+  startDate: string
+  /** 总课时 */
+  totalSessions: number
 }
 
 // ==================== 财务管理 ====================
@@ -498,13 +640,14 @@ export type ExpenseCategory = 'rent' | 'salary' | 'utility' | 'maintenance' | 'm
 
 /** 财务记录 */
 export interface FinanceRecord {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   type: FinanceEntryType
   /** 收入类别 / 支出类别(联合类型) */
   category: IncomeCategory | ExpenseCategory
   amount: number
   /** 金额(分) */
-  venueId?: number
+  venueId?: string | number
   venueName?: string
   recordDate: string
   /** 经办人 */
@@ -540,7 +683,7 @@ export interface MonthlyFinance {
 
 /** 球馆收支汇总 */
 export interface VenueFinanceSummary {
-  venueId: number
+  venueId: string | number
   venueName: string
   booking: number
   course: number
@@ -556,7 +699,8 @@ export type AccountStatus = 'active' | 'disabled'
 
 /** 经营者入驻申请 */
 export interface OperatorApplication {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   /** 公司名称 */
   companyName: string
   /** 营业执照编号 */
@@ -587,17 +731,18 @@ export interface OperatorApplication {
 
 /** 管理后台账号 */
 export interface AdminAccount {
-  id: number
+  /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
+  id: string | number
   /** 所属经营者 ID */
-  operatorId: number
+  operatorId: string | number
   /** 所属经营者名称 */
   operatorName?: string
   username: string
   nickname: string
   phone: string
   role: AdminRole
-  /** 关联球馆 ID 列表 */
-  venueIds: number[]
+  /** 关联球馆 ID 列表(雪花大整数, 均为字符串) */
+  venueIds: (string | number)[]
   /** 关联球馆名称列表 */
   venueNames?: string[]
   status: AccountStatus

@@ -10,11 +10,17 @@ import type {
   ExpenseCategory,
 } from '@/types/models'
 
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
+
 /** 财务记录查询参数 */
 export interface FinanceQuery extends PageQuery {
   type?: FinanceEntryType
   category?: IncomeCategory | ExpenseCategory
-  venueId?: number
+  venueId?: IdParam
   /** YYYY-MM */
   month?: string
 }
@@ -25,7 +31,7 @@ export interface FinanceRecordPayload {
   category: IncomeCategory | ExpenseCategory
   /** 金额(分) */
   amount: number
-  venueId?: number
+  venueId?: IdParam
   /** YYYY-MM-DD */
   recordDate: string
   /** 经办人 */
@@ -78,7 +84,7 @@ export function createFinanceRecord(data: FinanceRecordPayload) {
 }
 
 /** 更新财务记录 */
-export function updateFinanceRecord(id: number, data: FinanceRecordPayload) {
+export function updateFinanceRecord(id: IdParam, data: FinanceRecordPayload) {
   return request<FinanceRecord>({
     url: `/finance/record/${id}`,
     method: 'put',
@@ -87,7 +93,7 @@ export function updateFinanceRecord(id: number, data: FinanceRecordPayload) {
 }
 
 /** 删除财务记录 */
-export function deleteFinanceRecord(id: number) {
+export function deleteFinanceRecord(id: IdParam) {
   return request<void>({
     url: `/finance/record/${id}`,
     method: 'delete',

@@ -25,7 +25,13 @@ export function getAllVenues() {
   })
 }
 
-export function getVenueDetail(id: number) {
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
+
+export function getVenueDetail(id: IdParam) {
   return request<Venue>({
     url: `/venue/${id}`,
     method: 'get',
@@ -40,7 +46,7 @@ export function createVenue(data: Partial<Venue>) {
   })
 }
 
-export function updateVenue(id: number, data: Partial<Venue>) {
+export function updateVenue(id: IdParam, data: Partial<Venue>) {
   return request<Venue>({
     url: `/venue/${id}`,
     method: 'put',
@@ -48,7 +54,7 @@ export function updateVenue(id: number, data: Partial<Venue>) {
   })
 }
 
-export function deleteVenue(id: number) {
+export function deleteVenue(id: IdParam) {
   return request<void>({
     url: `/venue/${id}`,
     method: 'delete',
@@ -56,14 +62,14 @@ export function deleteVenue(id: number) {
 }
 
 /** 场地相关 */
-export function getVenueCourts(venueId: number) {
+export function getVenueCourts(venueId: IdParam) {
   return request<Court[]>({
     url: `/venue/${venueId}/courts`,
     method: 'get',
   })
 }
 
-export function createCourt(venueId: number, data: Partial<Court>) {
+export function createCourt(venueId: IdParam, data: Partial<Court>) {
   return request<Court>({
     url: `/venue/${venueId}/courts`,
     method: 'post',
@@ -71,7 +77,7 @@ export function createCourt(venueId: number, data: Partial<Court>) {
   })
 }
 
-export function updateCourt(venueId: number, courtId: number, data: Partial<Court>) {
+export function updateCourt(venueId: IdParam, courtId: IdParam, data: Partial<Court>) {
   return request<Court>({
     url: `/venue/${venueId}/courts/${courtId}`,
     method: 'put',
@@ -79,7 +85,7 @@ export function updateCourt(venueId: number, courtId: number, data: Partial<Cour
   })
 }
 
-export function deleteCourt(venueId: number, courtId: number) {
+export function deleteCourt(venueId: IdParam, courtId: IdParam) {
   return request<void>({
     url: `/venue/${venueId}/courts/${courtId}`,
     method: 'delete',
@@ -87,7 +93,7 @@ export function deleteCourt(venueId: number, courtId: number) {
 }
 
 /** 球馆价格分组配置（按 priority 降序返回） */
-export function getVenuePriceGroups(venueId: number) {
+export function getVenuePriceGroups(venueId: IdParam) {
   return request<PriceGroup[]>({
     url: `/venue/${venueId}/price-groups`,
     method: 'get',
@@ -95,7 +101,7 @@ export function getVenuePriceGroups(venueId: number) {
 }
 
 /** 保存球馆价格分组（全量覆盖） */
-export function saveVenuePriceGroups(venueId: number, data: PriceGroup[]) {
+export function saveVenuePriceGroups(venueId: IdParam, data: PriceGroup[]) {
   return request<void>({
     url: `/venue/${venueId}/price-groups`,
     method: 'put',

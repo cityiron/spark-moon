@@ -78,8 +78,18 @@
               <template v-else-if="column.dataIndex === 'coachName'">
                 {{ record.coachName || '-' }}
               </template>
+              <template v-else-if="column.dataIndex === 'venueName'">
+                {{ record.venueName || '-' }}
+              </template>
               <template v-else-if="column.dataIndex === 'price'">
-                <span class="price-text">¥ {{ formatFen(record.price) }} /课时</span>
+                <template v-if="record.courseType === 'private'">
+                  <span class="price-text">1V1 ¥{{ formatFen(record.price1v1) }} /课时/人</span>
+                  <div v-if="record.price1v2 != null" class="sub-price">1V2 ¥{{ formatFen(record.price1v2) }} /课时/人</div>
+                </template>
+                <template v-else>
+                  <span class="price-text">¥{{ formatFen(record.price) }} /课时/人</span>
+                  <div v-if="record.maxStudents" class="sub-price">最多 {{ record.maxStudents }} 人</div>
+                </template>
               </template>
               <template v-else-if="column.dataIndex === 'studentCount'">
                 {{ record.studentCount ?? 0 }}
@@ -145,6 +155,15 @@
                   {{ record.name }}
                 </a-space>
               </template>
+              <template v-else-if="column.dataIndex === 'yearsOfExperience'">
+                {{ record.yearsOfExperience != null ? `${record.yearsOfExperience} 年` : '-' }}
+              </template>
+              <template v-else-if="column.dataIndex === 'bio'">
+                <a-tooltip v-if="record.bio" :title="record.bio">
+                  <span class="bio-ellipsis">{{ record.bio }}</span>
+                </a-tooltip>
+                <span v-else>-</span>
+              </template>
               <template v-else-if="column.dataIndex === 'sessionCount'">
                 {{ record.sessionCount ?? 0 }}
               </template>
@@ -201,14 +220,55 @@
               />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
-            <a-form-item label="单价(元/课时)" name="price">
+          <!-- 班课: 单价 -->
+          <a-col :span="12" v-if="courseForm.courseType === 'class'">
+            <a-form-item label="单价(元/课时/人)" name="price">
               <a-input-number
                 v-model:value="courseForm.price"
                 :min="0"
                 :step="50"
                 style="width: 100%"
                 placeholder="0.00"
+              />
+            </a-form-item>
+          </a-col>
+          <!-- 私教: 1V1 单价 -->
+          <a-col :span="12" v-else>
+            <a-form-item label="1V1 单价(元/课时/人)" name="price1v1">
+              <a-input-number
+                v-model:value="courseForm.price1v1"
+                :min="0"
+                :step="50"
+                style="width: 100%"
+                placeholder="如 400"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <!-- 班课: 最大人数 -->
+        <a-row :gutter="16" v-if="courseForm.courseType === 'class'">
+          <a-col :span="12">
+            <a-form-item label="最大人数" name="maxStudents">
+              <a-input-number
+                v-model:value="courseForm.maxStudents"
+                :min="1"
+                :step="1"
+                style="width: 100%"
+                placeholder="如 12"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <!-- 私教: 1V2 单价 -->
+        <a-row :gutter="16" v-else>
+          <a-col :span="12">
+            <a-form-item label="1V2 单价(元/课时/人)" name="price1v2">
+              <a-input-number
+                v-model:value="courseForm.price1v2"
+                :min="0"
+                :step="50"
+                style="width: 100%"
+                placeholder="如 230"
               />
             </a-form-item>
           </a-col>
@@ -231,8 +291,28 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="常驻球馆" name="defaultVenueId" extra="仅详情页展示, 排课时可另行指定实际球馆">
+              <a-select
+                v-model:value="courseForm.defaultVenueId"
+                placeholder="请选择常驻球馆"
+                :options="venueOptions"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="报名条件" name="requirement">
+              <a-input v-model:value="courseForm.requirement" placeholder="如: 6-12 岁零基础" :maxlength="100" />
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-form-item label="课程描述" name="description">
           <a-textarea v-model:value="courseForm.description" :rows="3" placeholder="课程描述" />
+        </a-form-item>
+        <a-form-item label="课程大纲" name="outline" extra="每行一节, 如: 握拍与发球 / 高远球基础">
+          <a-textarea v-model:value="courseForm.outline" :rows="4" placeholder="每行一节, 对应小程序详情页逐节展示" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -254,6 +334,24 @@
         </a-form-item>
         <a-form-item label="专项" name="specialty">
           <a-input v-model:value="coachForm.specialty" placeholder="如: 单打技术 / 双打战术 / 少儿启蒙" />
+        </a-form-item>
+        <a-form-item label="教龄(年)" name="yearsOfExperience">
+          <a-input-number
+            v-model:value="coachForm.yearsOfExperience"
+            :min="0"
+            :max="60"
+            :step="1"
+            style="width: 100%"
+            placeholder="如 6"
+          />
+        </a-form-item>
+        <a-form-item label="履历" name="bio">
+          <a-textarea
+            v-model:value="coachForm.bio"
+            :rows="3"
+            placeholder="如: 国家二级运动员 · 擅长少儿启蒙与单打基础教学"
+            :maxlength="500"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -308,6 +406,7 @@ import {
   getCourseStudents,
   type CourseQuery,
 } from '@/api/training'
+import { getAllVenues } from '@/api/venue'
 import { useTable } from '@/composables/useTable'
 import type { PageQuery } from '@/types/api'
 import type {
@@ -317,6 +416,7 @@ import type {
   CourseStats,
   CourseType,
   CourseStatus,
+  Venue,
 } from '@/types/models'
 
 // ===== 工具 =====
@@ -382,6 +482,7 @@ const searchStatus = ref<CourseStatus | undefined>(undefined)
 const courseColumns: TableColumnsType = [
   { title: '课程名', dataIndex: 'name', width: 220 },
   { title: '教练', dataIndex: 'coachName', width: 120 },
+  { title: '常驻球馆', dataIndex: 'venueName', width: 160 },
   { title: '总课时', dataIndex: 'totalSessions', width: 90, align: 'right' },
   { title: '单价', dataIndex: 'price', width: 140, align: 'right' },
   { title: '报名人数', dataIndex: 'studentCount', width: 100, align: 'right' },
@@ -429,7 +530,7 @@ const coachSearchKeyword = ref('')
 const coachList = ref<Coach[]>([])
 const coachLoading = ref(false)
 const coachOptions = computed(() =>
-  coachList.value.map((c) => ({ label: `${c.name}（${c.specialty || '通用'}）`, value: c.id })),
+  coachList.value.map((c) => ({ label: `${c.name}（${c.specialty || '通用'}）`, value: String(c.id) })),
 )
 
 async function loadCoachList() {
@@ -453,23 +554,46 @@ function handleCoachReset() {
 
 const coachColumns: TableColumnsType = [
   { title: '姓名', dataIndex: 'name', width: 180 },
+  { title: '教龄', dataIndex: 'yearsOfExperience', width: 90, align: 'right' },
   { title: '手机号', dataIndex: 'phone', width: 150 },
   { title: '专项', dataIndex: 'specialty', width: 180 },
+  { title: '履历', dataIndex: 'bio', width: 240 },
   { title: '已排课节数', dataIndex: 'sessionCount', width: 120, align: 'right' },
   { title: '操作', dataIndex: 'action', width: 160 },
 ]
+
+// ===== 球馆列表 (供课程表单"常驻球馆"下拉使用) =====
+const venueList = ref<Venue[]>([])
+const venueOptions = computed(() =>
+  venueList.value.map((v) => ({ label: v.name, value: String(v.id) })),
+)
+
+async function loadVenueList() {
+  try {
+    venueList.value = (await getAllVenues()) || []
+  } catch {
+    venueList.value = []
+  }
+}
 
 // ===== 新建/编辑课程 =====
 const courseModalOpen = ref(false)
 const isCourseEdit = ref(false)
 const submitting = ref(false)
 const courseFormRef = ref<FormInstance>()
-const editingCourseId = ref(0)
+// ID 为雪花大整数，以字符串存储避免 JS 精度丢失
+const editingCourseId = ref('')
 const courseForm = reactive<{
   name: string
-  coachId: number | undefined
+  coachId: string | number | undefined
   totalSessions: number
   price: number
+  price1v1?: number
+  price1v2?: number
+  maxStudents?: number
+  defaultVenueId?: string | number | undefined
+  requirement: string
+  outline: string
   courseType: CourseType
   description: string
   status: CourseStatus
@@ -478,6 +602,12 @@ const courseForm = reactive<{
   coachId: undefined,
   totalSessions: 0,
   price: 0,
+  price1v1: undefined,
+  price1v2: undefined,
+  maxStudents: undefined,
+  defaultVenueId: undefined,
+  requirement: '',
+  outline: '',
   courseType: 'class',
   description: '',
   status: 'active',
@@ -497,6 +627,12 @@ function openCreateCourse() {
     coachId: undefined,
     totalSessions: 0,
     price: 0,
+    price1v1: undefined,
+    price1v2: undefined,
+    maxStudents: undefined,
+    defaultVenueId: undefined,
+    requirement: '',
+    outline: '',
     courseType: 'class',
     description: '',
     status: 'active',
@@ -504,38 +640,70 @@ function openCreateCourse() {
   courseModalOpen.value = true
   // 刷新教练下拉, 确保选项最新
   loadCoachList()
+  loadVenueList()
 }
 function openEditCourse(record: TrainingCourse) {
   isCourseEdit.value = true
-  editingCourseId.value = record.id
+  editingCourseId.value = String(record.id)
   Object.assign(courseForm, {
     name: record.name,
-    coachId: record.coachId,
+    coachId: String(record.coachId),
     totalSessions: record.totalSessions,
     // 分转元
     price: record.price / 100,
+    price1v1: record.price1v1 != null ? record.price1v1 / 100 : undefined,
+    price1v2: record.price1v2 != null ? record.price1v2 / 100 : undefined,
+    maxStudents: record.maxStudents ?? undefined,
+    defaultVenueId: record.defaultVenueId != null ? String(record.defaultVenueId) : undefined,
+    requirement: record.requirement || '',
+    outline: record.outline || '',
     courseType: record.courseType,
     description: record.description,
     status: record.status,
   })
   courseModalOpen.value = true
   loadCoachList()
+  loadVenueList()
 }
 
 async function submitCourse() {
+  const isPrivate = courseForm.courseType === 'private'
+  // 私教要求 1V1 单价, 班课要求单价
+  if (isPrivate) {
+    if (!courseForm.price1v1 || courseForm.price1v1 <= 0) {
+      message.warning('请填写 1V1 单价')
+      return
+    }
+  } else if (!courseForm.price || courseForm.price <= 0) {
+    message.warning('请填写单价')
+    return
+  }
   await courseFormRef.value?.validate()
   submitting.value = true
   try {
-    const payload = {
+    const base = {
       name: courseForm.name,
       coachId: courseForm.coachId,
       totalSessions: courseForm.totalSessions,
-      // 元转分
-      price: Math.round(courseForm.price * 100),
       courseType: courseForm.courseType,
+      defaultVenueId: courseForm.defaultVenueId ? String(courseForm.defaultVenueId) : undefined,
+      requirement: courseForm.requirement || undefined,
+      outline: courseForm.outline || undefined,
       description: courseForm.description,
       status: courseForm.status,
     }
+    // 元转分; 按课程类型提交对应价格配置
+    const payload = isPrivate
+      ? {
+          ...base,
+          price1v1: Math.round((courseForm.price1v1 ?? 0) * 100),
+          price1v2: courseForm.price1v2 != null ? Math.round(courseForm.price1v2 * 100) : undefined,
+        }
+      : {
+          ...base,
+          price: Math.round((courseForm.price ?? 0) * 100),
+          maxStudents: courseForm.maxStudents ?? undefined,
+        }
     if (isCourseEdit.value) {
       await updateCourse(editingCourseId.value, payload)
       message.success('课程更新成功')
@@ -581,7 +749,7 @@ async function handleDeleteCourse(record: TrainingCourse) {
 // ===== 报名学员 Drawer =====
 const studentDrawerOpen = ref(false)
 const currentCourse = ref<TrainingCourse | null>(null)
-const currentCourseId = ref(0)
+const currentCourseId = ref('')
 
 const studentColumns: TableColumnsType = [
   { title: '学员', dataIndex: 'studentName', width: 120 },
@@ -606,7 +774,7 @@ const {
 
 function openStudentDrawer(record: TrainingCourse) {
   currentCourse.value = record
-  currentCourseId.value = record.id
+  currentCourseId.value = String(record.id)
   studentDrawerOpen.value = true
   refreshStudents()
 }
@@ -615,11 +783,20 @@ function openStudentDrawer(record: TrainingCourse) {
 const coachModalOpen = ref(false)
 const isCoachEdit = ref(false)
 const coachFormRef = ref<FormInstance>()
-const editingCoachId = ref(0)
-const coachForm = reactive<{ name: string; phone: string; specialty: string }>({
+// ID 为雪花大整数，以字符串存储避免 JS 精度丢失
+const editingCoachId = ref('')
+const coachForm = reactive<{
+  name: string
+  phone: string
+  specialty: string
+  yearsOfExperience?: number
+  bio: string
+}>({
   name: '',
   phone: '',
   specialty: '',
+  yearsOfExperience: undefined,
+  bio: '',
 })
 const coachRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
@@ -631,16 +808,18 @@ const coachRules = {
 
 function openCreateCoach() {
   isCoachEdit.value = false
-  Object.assign(coachForm, { name: '', phone: '', specialty: '' })
+  Object.assign(coachForm, { name: '', phone: '', specialty: '', yearsOfExperience: undefined, bio: '' })
   coachModalOpen.value = true
 }
 function openEditCoach(record: Coach) {
   isCoachEdit.value = true
-  editingCoachId.value = record.id
+  editingCoachId.value = String(record.id)
   Object.assign(coachForm, {
     name: record.name,
     phone: record.phone,
     specialty: record.specialty,
+    yearsOfExperience: record.yearsOfExperience ?? undefined,
+    bio: record.bio || '',
   })
   coachModalOpen.value = true
 }
@@ -678,6 +857,7 @@ loadCourseList()
 loadStats()
 loadActiveCourseCount()
 loadCoachList()
+loadVenueList()
 </script>
 
 <style scoped lang="scss">

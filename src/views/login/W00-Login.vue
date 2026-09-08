@@ -186,7 +186,7 @@ const loginType = ref<LoginType>('account')
 
 const tipsText = computed(() =>
   loginType.value === 'account'
-    ? '演示账号: admin / 123456(超管), lijg / 123456(经营者)'
+    ? '演示账号: admin / 123456(超管), lijiangguo / 123456(经营者)'
     : '演示手机号: 13800138000(超管) / 13900139001(经营者), 验证码: 123456',
 )
 

@@ -541,6 +541,7 @@ import type {
   PriceGroupMatchType,
   PriceRule,
   CourtScope,
+  StatusEnum,
 } from '@/types/models'
 
 // ===== 映射 =====
@@ -615,16 +616,17 @@ function courtScopeLabel(s?: string): string {
 }
 
 // ===== 球馆选择器 =====
-const venueOptions = ref<{ label: string, value: number }[]>([])
+const venueOptions = ref<{ label: string, value: string }[]>([])
 const venueLoading = ref(false)
-const currentVenueId = ref<number>(0)
+const currentVenueId = ref<string>('')
 const detailLoading = ref(false)
 
 async function loadVenueOptions() {
   venueLoading.value = true
   try {
     const list = await getAllVenues()
-    venueOptions.value = (list || []).map((v) => ({ label: v.name, value: v.id }))
+    // 后端 id 为字符串（雪花大整数序列化为字符串），此处原样保留字符串
+    venueOptions.value = (list || []).map((v) => ({ label: v.name, value: String(v.id) }))
     if (venueOptions.value.length > 0 && !currentVenueId.value) {
       currentVenueId.value = venueOptions.value[0].value
       await loadVenueDetail()
@@ -769,7 +771,8 @@ async function loadCourts() {
 const courtDrawerOpen = ref(false)
 const courtIsEdit = ref(false)
 const courtFormRef = ref<FormInstance>()
-const editingCourtId = ref<number>(0)
+// 编辑时记录场地 ID（后端返回字符串，避免雪花大整数精度丢失）
+const editingCourtId = ref<string>('')
 const courtForm = reactive<Partial<Court>>({
   name: '',
   type: 'badminton',
@@ -798,7 +801,7 @@ function openCourtCreate() {
 
 function openCourtEdit(court: Court) {
   courtIsEdit.value = true
-  editingCourtId.value = court.id
+  editingCourtId.value = String(court.id)
   Object.assign(courtForm, {
     name: court.name,
     type: court.type,
@@ -852,7 +855,7 @@ async function handleDeleteCourt(court: Court) {
 }
 
 // ===== 时段价格（价格组 + 优先级） =====
-type PriceGroupRow = PriceGroup & { key: number }
+type PriceGroupRow = PriceGroup & { key: string | number }
 const groupList = ref<PriceGroupRow[]>([])
 const priceLoading = ref(false)
 const groupColumns: TableColumnsType = [
@@ -922,7 +925,7 @@ async function loadPriceConfigs() {
 const groupDrawerOpen = ref(false)
 const groupIsEdit = ref(false)
 const groupFormRef = ref<FormInstance>()
-const editingGroupKey = ref<number | null>(null)
+const editingGroupKey = ref<string | number | null>(null)
 const groupForm = reactive<{
   name: string
   matchType: PriceGroupMatchType
@@ -930,7 +933,7 @@ const groupForm = reactive<{
   daysArr: number[]
   dateRange: [string, string] | []
   priority: number
-  status: number
+  status: StatusEnum
 }>({
   name: '',
   matchType: 'default',
@@ -977,7 +980,7 @@ function onMatchTypeChange() {
 }
 
 /** 组内规则 */
-type RuleRow = PriceRule & { key: number }
+type RuleRow = PriceRule & { key: string | number }
 const ruleList = ref<RuleRow[]>([])
 const ruleForm = reactive<{
   startTime: string

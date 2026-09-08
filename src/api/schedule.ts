@@ -1,12 +1,18 @@
 import { request } from './request'
 import type { PageQuery, PageResult } from '@/types/api'
-import type { TrainingSession, AutoScheduleParams } from '@/types/models'
+import type { TrainingSession, AutoScheduleParams, CalcEndDateParams } from '@/types/models'
+
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
 
 /** 排课查询参数 */
 export interface SessionQuery extends PageQuery {
-  courseId?: number
-  venueId?: number
-  coachId?: number
+  courseId?: IdParam
+  venueId?: IdParam
+  coachId?: IdParam
   /** 单日筛选 YYYY-MM-DD */
   date?: string
 }
@@ -29,6 +35,15 @@ export function autoSchedule(data: AutoScheduleParams) {
   })
 }
 
+/** 推算排课结束日期(跳过法定放假日), 返回 YYYY-MM-DD */
+export function calcEndDate(data: CalcEndDateParams) {
+  return request<string>({
+    url: '/training/sessions/calc-end-date',
+    method: 'post',
+    data,
+  })
+}
+
 /** 手动单节排课 */
 export function createSession(data: Partial<TrainingSession>) {
   return request<TrainingSession>({
@@ -39,7 +54,7 @@ export function createSession(data: Partial<TrainingSession>) {
 }
 
 /** 调整排课(已消课的不可调整, 后端返回 400) */
-export function updateSession(id: number, data: Partial<TrainingSession>) {
+export function updateSession(id: IdParam, data: Partial<TrainingSession>) {
   return request<TrainingSession>({
     url: `/training/session/${id}`,
     method: 'put',
@@ -48,7 +63,7 @@ export function updateSession(id: number, data: Partial<TrainingSession>) {
 }
 
 /** 删除排课 */
-export function deleteSession(id: number) {
+export function deleteSession(id: IdParam) {
   return request<void>({
     url: `/training/session/${id}`,
     method: 'delete',
@@ -64,7 +79,7 @@ export function getPendingSessions() {
 }
 
 /** 解决冲突(可改场地或时间) */
-export function resolveConflict(id: number, data: Partial<TrainingSession>) {
+export function resolveConflict(id: IdParam, data: Partial<TrainingSession>) {
   return request<TrainingSession>({
     url: `/training/session/${id}/resolve`,
     method: 'post',

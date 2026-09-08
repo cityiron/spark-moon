@@ -40,10 +40,22 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '预订管理', icon: 'CalendarOutlined' },
       },
       {
+        path: 'orders',
+        name: 'OrderManage',
+        component: () => import('@/views/booking/W09-OrderManage.vue'),
+        meta: { title: '订单管理', icon: 'ProfileOutlined' },
+      },
+      {
         path: 'member',
         name: 'MemberManage',
         component: () => import('@/views/member/W03-MemberManage.vue'),
         meta: { title: '会员管理', icon: 'TeamOutlined' },
+      },
+      {
+        path: 'friend',
+        name: 'FriendManage',
+        component: () => import('@/views/member/W14-FriendManage.vue'),
+        meta: { title: '球友管理', icon: 'UsergroupAddOutlined' },
       },
       {
         path: 'platform-card',
@@ -55,7 +67,7 @@ const routes: RouteRecordRaw[] = [
         path: 'vip',
         name: 'VipPlanManage',
         component: () => import('@/views/vip/W04-VipPlanManage.vue'),
-        meta: { title: 'VIP 权益配置', icon: 'CrownOutlined' },
+        meta: { title: '俱乐部会员卡', icon: 'CrownOutlined' },
       },
       {
         path: 'training',
@@ -68,6 +80,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ScheduleManage',
         component: () => import('@/views/schedule/W06-ScheduleManage.vue'),
         meta: { title: '课时排课', icon: 'ScheduleOutlined' },
+      },
+      {
+        path: 'activity',
+        name: 'ActivityManage',
+        component: () => import('@/views/activity/W10-ActivityManage.vue'),
+        meta: { title: '活动管理', icon: 'FlagOutlined' },
       },
       {
         path: 'finance',
@@ -101,11 +119,14 @@ export const ROLE_MENUS: Record<string, string[]> = {
   '/operator': ['super_admin'], // 账号管理: 仅平台超管
   '/venue': ['super_admin', 'operator', 'admin'], // 球馆管理
   '/booking': ['super_admin', 'operator', 'admin', 'staff'], // 场地预订
+  '/orders': ['super_admin', 'operator', 'admin', 'staff'], // 订单管理(统一订单列表)
   '/member': ['super_admin', 'admin', 'staff', 'operator'], // 会员管理（俱乐部视角）
+  '/friend': ['super_admin', 'admin', 'staff', 'operator'], // 球友管理（小程序注册用户）
   '/platform-card': ['super_admin', 'admin'], // 平台会员卡: 平台维护
-  '/vip': ['super_admin', 'admin'], // VIP 权益配置（球馆卡）
-  '/training': ['super_admin', 'admin', 'coach'], // 培训课程管理
-  '/schedule': ['super_admin', 'admin', 'coach'], // 课时排课
+  '/vip': ['super_admin', 'admin', 'operator'], // 俱乐部会员卡（球馆卡，经营者可访问）
+  '/training': ['super_admin', 'admin', 'coach', 'operator'], // 培训课程管理
+  '/schedule': ['super_admin', 'admin', 'coach', 'operator'], // 课时排课
+  '/activity': ['super_admin', 'admin', 'operator'], // 活动管理
   '/finance': ['super_admin', 'admin'], // 财务管理
 }
 

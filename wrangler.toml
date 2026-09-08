@@ -1,0 +1,6 @@
+# Cloudflare Pages 项目配置 - PC 管理后台 (sport.funnycode.cn)
+# 部署: cp -r functions dist/functions && npx wrangler@3 pages deploy dist --project-name=badminton-admin
+# 需环境变量: CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID
+
+name = "badminton-admin"
+compatibility_date = "2024-09-01"

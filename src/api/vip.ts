@@ -2,11 +2,18 @@ import { request } from './request'
 import type { PageQuery, PageResult } from '@/types/api'
 import type {
   VipPlan,
-  VipPlanVenue,
   VipMembership,
   VipPlanStatus,
+  VipBenefit,
+  RechargeTier,
   Venue,
 } from '@/types/models'
+
+/**
+ * ID 为雪花大整数，后端统一序列化为字符串避免 JS 精度丢失，
+ * 因此各接口参数类型允许 string | number，前端应优先传 string。
+ */
+export type IdParam = string | number
 
 /** VIP 套餐查询参数 */
 export interface VipPlanQuery extends PageQuery {
@@ -17,7 +24,7 @@ export interface VipPlanQuery extends PageQuery {
 
 /** 已购 VIP 权益会员查询参数 */
 export interface VipMembershipQuery extends PageQuery {
-  vipPlanId?: number
+  vipPlanId?: IdParam
   status?: 'active' | 'expired'
   /** 卡类型: platform 平台卡 / venue 球馆卡 */
   planType?: 'platform' | 'venue'
@@ -70,7 +77,7 @@ export function createVipPlan(data: Partial<VipPlan>) {
 }
 
 /** 更新套餐 */
-export function updateVipPlan(id: number, data: Partial<VipPlan>) {
+export function updateVipPlan(id: IdParam, data: Partial<VipPlan>) {
   return request<VipPlan>({
     url: `/vip/plan/${id}`,
     method: 'put',
@@ -79,7 +86,7 @@ export function updateVipPlan(id: number, data: Partial<VipPlan>) {
 }
 
 /** 上架/下架套餐（后端为 query 参数） */
-export function toggleVipPlanStatus(id: number, status: VipPlanStatus) {
+export function toggleVipPlanStatus(id: IdParam, status: VipPlanStatus) {
   return request<void>({
     url: `/vip/plan/${id}/status`,
     method: 'patch',
@@ -88,27 +95,44 @@ export function toggleVipPlanStatus(id: number, status: VipPlanStatus) {
 }
 
 /** 删除套餐 */
-export function deleteVipPlan(id: number) {
+export function deleteVipPlan(id: IdParam) {
   return request<void>({
     url: `/vip/plan/${id}`,
     method: 'delete',
   })
 }
 
-/** 获取套餐各球馆折扣配置（后端暂未实现，保留占位） */
-export function getVipPlanVenueDiscounts(id: number) {
-  return request<VipPlanVenue[]>({
-    url: `/vip/plan/${id}/discounts`,
+/** 获取卡种权益列表 */
+export function getVipPlanBenefits(planId: IdParam) {
+  return request<VipBenefit[]>({
+    url: `/vip/plan/${planId}/benefits`,
     method: 'get',
   })
 }
 
-/** 批量保存套餐球馆折扣（后端暂未实现，保留占位） */
-export function saveVipPlanVenueDiscounts(id: number, data: VipPlanVenue[]) {
-  return request<void>({
-    url: `/vip/plan/${id}/discounts`,
-    method: 'post',
-    data,
+/** 覆盖保存卡种权益 */
+export function saveVipPlanBenefits(planId: IdParam, benefits: VipBenefit[]) {
+  return request<VipBenefit[]>({
+    url: `/vip/plan/${planId}/benefits`,
+    method: 'put',
+    data: benefits,
+  })
+}
+
+/** 储值等级档位列表 */
+export function getRechargeTiers() {
+  return request<RechargeTier[]>({
+    url: '/vip/recharge-tiers',
+    method: 'get',
+  })
+}
+
+/** 覆盖保存储值等级档位 */
+export function saveRechargeTiers(tiers: RechargeTier[]) {
+  return request<RechargeTier[]>({
+    url: '/vip/recharge-tiers',
+    method: 'put',
+    data: tiers,
   })
 }
 
@@ -131,10 +155,10 @@ export async function getVipMemberships(params: VipMembershipQuery) {
   } as PageResult<VipMembership>
 }
 
-/** 全部球馆(折扣配置球馆选择用) - 复用 /venue/list */
+/** 全部球馆(折扣配置球馆选择用) - 复用 /venue/all (返回数组, 经营者仅看自己俱乐部的球馆) */
 export function getAllVenues() {
   return request<Venue[]>({
-    url: '/venue/list',
+    url: '/venue/all',
     method: 'get',
   })
 }

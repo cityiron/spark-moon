@@ -126,19 +126,36 @@
                   />
                 </a-form-item>
               </a-col>
-              <a-col :span="12">
+              <a-col :span="6">
                 <a-form-item label="每周几次" name="weeklyTimes">
                   <a-input-number
                     v-model:value="autoForm.weeklyTimes"
                     :min="1"
                     :max="7"
                     style="width: 100%"
+                    @change="onWeeklyTimesChange"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="6">
+                <a-form-item label="总课时" name="totalSessions">
+                  <a-input
+                    :value="autoForm.totalSessions || ''"
+                    placeholder="选择课程后自动带出"
+                    disabled
                   />
                 </a-form-item>
               </a-col>
             </a-row>
             <a-form-item label="每周星期几" name="weekDays">
-              <a-checkbox-group v-model:value="autoForm.weekDays" :options="weekDayOptions" />
+              <a-checkbox-group
+                v-model:value="autoForm.weekDays"
+                :options="weekDayOptions"
+                @change="onWeekDaysChange"
+              />
+              <div class="sub-text">
+                每周 {{ autoForm.weeklyTimes || 1 }} 次，最多选择 {{ autoForm.weeklyTimes || 1 }} 个星期
+              </div>
             </a-form-item>
             <a-row :gutter="16">
               <a-col :span="12">
@@ -148,16 +165,19 @@
                     format="YYYY-MM-DD"
                     value-format="YYYY-MM-DD"
                     style="width: 100%"
+                    @change="calcAutoEndDate"
                   />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="结束日期" name="endDate">
+                <a-form-item label="结束日期(自动计算)" name="endDate">
                   <a-date-picker
                     v-model:value="autoForm.endDate"
                     format="YYYY-MM-DD"
                     value-format="YYYY-MM-DD"
                     style="width: 100%"
+                    disabled
+                    placeholder="选择起始日期/总课时后自动计算"
                   />
                 </a-form-item>
               </a-col>
@@ -207,6 +227,7 @@
             :loading="pendingLoading"
             row-key="id"
             :pagination="false"
+            :scroll="{ x: 960 }"
             size="middle"
           >
             <template #bodyCell="{ column, record }">
@@ -274,6 +295,15 @@
       </template>
       <template #footer>
         <a-button @click="detailModalOpen = false">关闭</a-button>
+        <a-popconfirm
+          v-if="detailSession && detailSession.status !== 'consumed' && detailSession.status !== 'cancelled'"
+          title="确认取消该排课? 取消后将释放该场地锁定"
+          ok-text="确认取消"
+          cancel-text="返回"
+          @confirm="cancelDetailSession"
+        >
+          <a-button danger>取消排课</a-button>
+        </a-popconfirm>
         <a-button
           v-if="detailSession && detailSession.status !== 'consumed'"
           type="primary"
@@ -459,6 +489,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import {
   getSessionList,
   autoSchedule,
+  calcEndDate,
   createSession,
   updateSession,
   deleteSession,
@@ -470,6 +501,7 @@ import { getAllVenues, getVenueCourts } from '@/api/venue'
 import type {
   TrainingSession,
   AutoScheduleParams,
+  CalcEndDateParams,
   SessionStatus,
   Coach,
   TrainingCourse,
@@ -530,11 +562,12 @@ const COLOR_HEX: Record<string, string> = {
 }
 
 /** 课程颜色 -> antd 预设色名(用于 a-tag) */
-function courseColor(courseId: number): string {
-  return PRESET_COLORS[courseId % PRESET_COLORS.length] || 'blue'
+function courseColor(courseId: string | number): string {
+  const n = Number(courseId)
+  return PRESET_COLORS[n % PRESET_COLORS.length] || 'blue'
 }
 /** 课程颜色 -> 实际色值(用于内联样式) */
-function courseColorHex(courseId: number): string {
+function courseColorHex(courseId: string | number): string {
   return COLOR_HEX[courseColor(courseId)] || '#1677ff'
 }
 
@@ -681,14 +714,14 @@ const formModalOpen = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const sessionFormRef = ref<FormInstance>()
-const editingId = ref(0)
-const sessionCourtOptions = ref<Court[]>([])
+const editingId = ref<string | number>(0)
+const sessionCourtOptions = ref<{ label: string, value: string | number }[]>([])
 
 const sessionForm = reactive<{
-  courseId?: number
-  coachId?: number
-  venueId?: number
-  courtId?: number
+  courseId?: string | number
+  coachId?: string | number
+  venueId?: string | number
+  courtId?: string | number
   date?: string
   startTime?: string
   endTime?: string
@@ -750,7 +783,7 @@ function openEdit(s: TrainingSession) {
   formModalOpen.value = true
 }
 
-async function onSessionVenueChange(venueId: number | undefined) {
+async function onSessionVenueChange(venueId: string | number | undefined) {
   sessionForm.courtId = undefined
   sessionCourtOptions.value = []
   if (venueId) {
@@ -779,16 +812,17 @@ async function submitSession() {
 // ===== Tab2 自动排课 =====
 const autoFormRef = ref<FormInstance>()
 const autoSubmitting = ref(false)
-const autoCourtOptions = ref<Court[]>([])
+const autoCourtOptions = ref<{ label: string, value: string | number }[]>([])
 
 const autoForm = reactive<AutoScheduleParams>({
-  courseId: undefined as unknown as number,
-  venueId: undefined as unknown as number,
-  courtId: undefined as unknown as number,
+  courseId: undefined as unknown as string | number,
+  venueId: undefined as unknown as string | number,
+  courtId: undefined as unknown as string | number,
   weeklyTimes: 1,
   weekDays: [],
   startDate: dayjs().format('YYYY-MM-DD'),
-  endDate: dayjs().add(1, 'month').format('YYYY-MM-DD'),
+  endDate: '',
+  totalSessions: 0,
   startTime: '09:00',
   duration: 60,
 })
@@ -808,23 +842,62 @@ const autoRules = {
   venueId: [{ required: true, message: '请选择球馆', trigger: 'change' }],
   courtId: [{ required: true, message: '请选择场地', trigger: 'change' }],
   weeklyTimes: [{ required: true, message: '请填写每周次数', trigger: 'blur' }],
+  totalSessions: [{ required: true, message: '所选课程缺少总课时，请重新选择课程', trigger: 'change' }],
   weekDays: [{ required: true, message: '请选择每周星期几', trigger: 'change' }],
   startDate: [{ required: true, message: '请选择起始日期', trigger: 'change' }],
-  endDate: [{ required: true, message: '请选择结束日期', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   duration: [{ required: true, message: '请填写时长', trigger: 'blur' }],
 }
 
-async function onAutoVenueChange(venueId: number | undefined) {
-  autoForm.courtId = undefined as unknown as number
+async function onAutoVenueChange(venueId: string | number | undefined) {
+  autoForm.courtId = undefined as unknown as string | number
   autoCourtOptions.value = []
   if (venueId) {
     await loadCourts(venueId, autoCourtOptions)
   }
 }
-// 课程/球馆变更时占位(预留联动)
+// 课程变更时自动带出该课程总课时(只读), 并联动计算结束日期
 function onAutoVenueOrCourseChange() {
-  // 暂无联动逻辑
+  const course = courses.value.find((c) => String(c.id) === String(autoForm.courseId))
+  autoForm.totalSessions = course?.totalSessions || 0
+  calcAutoEndDate()
+}
+
+// 每周几次变更: 超出上限的星期选择自动裁剪, 并重算结束日期
+function onWeeklyTimesChange() {
+  const max = autoForm.weeklyTimes || 1
+  if (autoForm.weekDays.length > max) {
+    autoForm.weekDays = autoForm.weekDays.slice(0, max)
+    message.warning(`每周 ${max} 次，已自动保留前 ${max} 个星期`)
+  }
+  calcAutoEndDate()
+}
+
+// 每周星期几选择: 最多只能选每周次数个, 超选时保留已选前几个
+function onWeekDaysChange(checked: (string | number | boolean)[]) {
+  const max = autoForm.weeklyTimes || 1
+  if (checked.length > max) {
+    autoForm.weekDays = checked.slice(0, max).map(Number)
+    message.warning(`每周最多选择 ${max} 个星期`)
+  } else {
+    autoForm.weekDays = checked.map(Number)
+  }
+  calcAutoEndDate()
+}
+
+// 按 每周几次/星期/总课时/起始日期 调用后端推算结束日期(跳过法定放假日)
+async function calcAutoEndDate() {
+  const { weeklyTimes, weekDays, startDate, totalSessions } = autoForm
+  if (!weeklyTimes || weekDays.length === 0 || !startDate || !totalSessions) {
+    autoForm.endDate = ''
+    return
+  }
+  try {
+    const params: CalcEndDateParams = { weeklyTimes, weekDays, startDate, totalSessions }
+    autoForm.endDate = await calcEndDate(params)
+  } catch {
+    autoForm.endDate = ''
+  }
 }
 
 async function submitAutoSchedule() {
@@ -841,9 +914,10 @@ async function submitAutoSchedule() {
 }
 
 // ===== 场地加载通用方法 =====
-async function loadCourts(venueId: number, target: { value: Court[] }) {
+async function loadCourts(venueId: string | number, target: { value: { label: string, value: string | number }[] }) {
   try {
-    target.value = await getVenueCourts(venueId)
+    const list = await getVenueCourts(venueId)
+    target.value = (list || []).map((c) => ({ label: c.name, value: c.id }))
   } catch {
     target.value = []
   }
@@ -881,16 +955,27 @@ async function cancelPending(record: TrainingSession) {
   loadPending()
 }
 
+// 排课详情弹窗取消: 删除排课并释放场地锁定, 刷新日历与待处理列表
+async function cancelDetailSession() {
+  const s = detailSession.value
+  if (!s) return
+  await deleteSession(s.id)
+  message.success('已取消该排课，场地锁定已释放')
+  detailModalOpen.value = false
+  loadCalendarSessions()
+  loadPending()
+}
+
 // ===== 解决冲突 Modal =====
 const resolveModalOpen = ref(false)
 const resolveSubmitting = ref(false)
 const resolveFormRef = ref<FormInstance>()
-const resolveCourtOptions = ref<Court[]>([])
+const resolveCourtOptions = ref<{ label: string, value: string | number }[]>([])
 
 const resolveForm = reactive<{
-  id: number
-  venueId?: number
-  courtId?: number
+  id: string | number
+  venueId?: string | number
+  courtId?: string | number
   date?: string
   startTime?: string
   endTime?: string
@@ -927,7 +1012,7 @@ async function openResolve(record: TrainingSession) {
   resolveModalOpen.value = true
 }
 
-async function onResolveVenueChange(venueId: number | undefined) {
+async function onResolveVenueChange(venueId: string | number | undefined) {
   resolveForm.courtId = undefined
   resolveCourtOptions.value = []
   if (venueId) {
@@ -1009,6 +1094,8 @@ onMounted(async () => {
 .calendar-cell {
   background: #fff;
   min-height: 116px;
+  min-width: 0; /* 防止 nowrap 排课文本把所在列撑宽, 保证 7 列等宽 */
+  overflow: hidden;
   padding: 6px;
   display: flex;
   flex-direction: column;

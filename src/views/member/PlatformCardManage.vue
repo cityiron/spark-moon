@@ -78,12 +78,40 @@
         <a-tab-pane key="venues" tab="开通球馆">
           <div class="table-toolbar">
             <div class="table-toolbar-left">
-              <span class="section-title">球馆平台卡开通状态</span>
+              <span class="section-title">球馆平台卡开通与折扣</span>
+              <a-input-search
+                v-model:value="venueKeyword"
+                placeholder="搜索球馆 / 俱乐部 / 地址"
+                allow-clear
+                style="width: 240px"
+              />
+              <a-select
+                v-model:value="discountPlanId"
+                placeholder="选择要配置折扣的平台卡"
+                style="width: 220px"
+                :options="planFilterOptions"
+                allow-clear
+                @change="handleDiscountPlanChange"
+              />
+              <a-alert
+                type="info"
+                show-icon
+                message="开启球馆接受平台卡后，可在此按球馆配置该平台卡的折扣率；未配置折扣的球馆不享受平台卡折扣"
+                style="flex: 1; max-width: 480px"
+              />
             </div>
+            <a-button
+              type="primary"
+              :disabled="!discountPlanId"
+              :loading="discountSaving"
+              @click="saveVenueDiscounts"
+            >
+              保存折扣配置
+            </a-button>
           </div>
           <a-table
             :columns="venueColumns"
-            :data-source="venueList"
+            :data-source="filteredVenueList"
             :loading="venueLoading"
             row-key="id"
             :pagination="false"
@@ -99,6 +127,18 @@
                   un-checked-children="未开通"
                   @change="(c: boolean | string) => handleVenueSwitch(record, c)"
                 />
+              </template>
+              <template v-else-if="column.dataIndex === 'discountRate'">
+                <a-input-number
+                  v-model:value="record.discountRate"
+                  :min="0.1"
+                  :max="1"
+                  :precision="2"
+                  :step="0.05"
+                  style="width: 120px"
+                  placeholder="1.0"
+                />
+                <span class="discount-hint">{{ discountLabel(record.discountRate) }}</span>
               </template>
             </template>
           </a-table>
@@ -206,17 +246,25 @@ import {
   updateVipPlan,
   toggleVipPlanStatus,
   deleteVipPlan,
+  getVipPlanBenefits,
+  saveVipPlanBenefits,
   getVipMemberships,
   getAllVenues,
   type VipMembershipQuery,
 } from '@/api/vip'
 import { updateVenue } from '@/api/venue'
-import type { VipPlan, VipMembership, VipPlanStatus, Venue } from '@/types/models'
+import type { VipPlan, VipMembership, VipPlanStatus, VipBenefit, Venue } from '@/types/models'
 
 /** 分转元, 保留两位小数 */
 function formatFen(fen: number | undefined): string {
   if (fen === undefined || fen === null) return '0.00'
   return (fen / 100).toFixed(2)
+}
+
+/** 折扣率转文案 0.8 -> "8.0 折" */
+function discountLabel(rate: number | undefined | null): string {
+  if (rate === undefined || rate === null) return '1.0 折'
+  return `${(rate * 10).toFixed(1)} 折`
 }
 
 const activeTab = ref('plans')
@@ -249,7 +297,7 @@ const formModalOpen = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const planFormRef = ref<FormInstance>()
-const editingPlanId = ref(0)
+const editingPlanId = ref<string | number>(0)
 const planForm = reactive<{
   name: string
   price: number
@@ -329,16 +377,37 @@ const venueColumns: TableColumnsType = [
   { title: '归属俱乐部', dataIndex: 'operatorName', width: 200 },
   { title: '地址', dataIndex: 'address' },
   { title: '平台卡状态', dataIndex: 'acceptPlatformCard', width: 140 },
+  { title: '折扣率', dataIndex: 'discountRate', width: 180 },
 ]
 
 const venueLoading = ref(false)
 const venueList = ref<Venue[]>([])
+const discountPlanId = ref<number | undefined>(undefined)
+const discountSaving = ref(false)
+
+/** 开通球馆搜索关键词 */
+const venueKeyword = ref('')
+/** 按关键词过滤后的球馆列表（名称/归属俱乐部/地址） */
+const filteredVenueList = computed(() => {
+  const kw = venueKeyword.value.trim().toLowerCase()
+  if (!kw) return venueList.value
+  return venueList.value.filter(
+    (v) =>
+      (v.name || '').toLowerCase().includes(kw)
+      || (v.operatorName || '').toLowerCase().includes(kw)
+      || (v.address || '').toLowerCase().includes(kw),
+  )
+})
 
 async function loadVenues() {
   venueLoading.value = true
   try {
     const list = await getAllVenues()
     venueList.value = Array.isArray(list) ? list : []
+    // 若已选中平台卡, 重新回填折扣率
+    if (discountPlanId.value) {
+      await applyVenueDiscounts()
+    }
   } catch {
     venueList.value = []
   } finally {
@@ -358,6 +427,53 @@ async function handleVenueSwitch(record: Venue, checked: boolean | string) {
     message.success(checked ? '已开通平台卡' : '已关闭平台卡')
   } catch {
     // 失败保持原状态
+  }
+}
+
+/** 切换平台卡: 回填各球馆折扣率 */
+async function handleDiscountPlanChange() {
+  venueList.value.forEach((v) => (v.discountRate = null))
+  if (!discountPlanId.value) return
+  await applyVenueDiscounts()
+}
+
+/** 按选中平台卡的权益(场地折扣)回填各球馆折扣率 */
+async function applyVenueDiscounts() {
+  const planId = discountPlanId.value
+  if (!planId) return
+  try {
+    const benefits = await getVipPlanBenefits(planId)
+    const venueMap = new Map(
+      benefits
+        .filter((b) => b.benefitType === 'VENUE_DISCOUNT' && b.venueId != null)
+        .map((b) => [String(b.venueId), b.discountRate ?? null]),
+    )
+    venueList.value.forEach((v) => {
+      v.discountRate = venueMap.get(String(v.id)) ?? null
+    })
+  } catch {
+    // 读取失败保持为空
+  }
+}
+
+/** 保存选中平台卡在各球馆的折扣率 */
+async function saveVenueDiscounts() {
+  const planId = discountPlanId.value
+  if (!planId) return
+  const payload = venueList.value
+    .filter((v) => v.acceptPlatformCard === 1 && v.discountRate != null && v.discountRate < 1)
+    .map((v) => ({
+      planId,
+      benefitType: 'VENUE_DISCOUNT' as const,
+      venueId: v.id,
+      discountRate: v.discountRate,
+    }))
+  discountSaving.value = true
+  try {
+    await saveVipPlanBenefits(planId, payload)
+    message.success('平台卡折扣配置已保存')
+  } finally {
+    discountSaving.value = false
   }
 }
 
@@ -394,7 +510,7 @@ const {
   initialQuery: { vipPlanId: undefined, status: undefined, planType: 'platform' },
 })
 
-const filterPlanId = ref<number | undefined>(undefined)
+const filterPlanId = ref<string | number | undefined>(undefined)
 const filterStatus = ref<'active' | 'expired' | undefined>(undefined)
 function handleMembershipSearch() {
   membershipQuery.vipPlanId = filterPlanId.value
