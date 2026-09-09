@@ -595,6 +595,7 @@ async function handleDelete(record: ActivityAdminItem) {
 onMounted(() => {
   if (isSuperAdmin) loadOperators()
   loadVenues()
+  table.loadData()
 })
 </script>
 
