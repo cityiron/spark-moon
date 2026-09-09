@@ -6,7 +6,7 @@
   "description": "羽球管家 - 羽毛球场馆管理平台后台",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && vite build && node -e \"require('fs').cpSync('functions','dist/functions',{recursive:true})\"",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit"
   },
