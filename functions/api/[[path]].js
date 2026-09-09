@@ -3,8 +3,8 @@
 //       cp -r functions dist/functions && npx wrangler pages deploy dist)
 // 参考: https://developers.cloudflare.com/pages/functions/
 
-/** 后端目标地址(腾讯云 Nginx/Tunnel 入口) */
-const BACKEND_ORIGIN = 'https://wx.funnycode.cn'
+/** 后端目标地址(腾讯云后端入口; 隧道建好后可改回 https://wx.funnycode.cn) */
+const BACKEND_ORIGIN = 'http://124.221.205.79:8080'
 
 export async function onRequest(context) {
   const { request } = context
