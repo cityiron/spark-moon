@@ -39,7 +39,8 @@ export async function onRequest(context) {
     const results = await Promise.all([
       probe('https://example.com/'),
       probe('http://124.221.205.79:8080/api/booking/venues'),
-      probe('http://124.221.205.79:80/api/booking/venues'),
+      probe('http://124.221.205.79.nip.io:8080/api/booking/venues'),
+      probe('http://124.221.205.79.sslip.io:8080/api/booking/venues'),
     ])
     return new Response(JSON.stringify({ version: FN_VERSION, results }, null, 2), {
       status: 200,
