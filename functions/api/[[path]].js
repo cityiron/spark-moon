@@ -1,10 +1,12 @@
 // Cloudflare Pages Functions - 将 /api/* 请求反代到腾讯云后端
-// 部署: 构建后把 functions/ 并入部署目录(CI 或本地执行:
-//       cp -r functions dist/functions && npx wrangler pages deploy dist)
+// Git 集成模式: functions/ 必须位于仓库根目录(不要在构建时复制进 dist)
 // 参考: https://developers.cloudflare.com/pages/functions/
 
 /** 后端目标地址(腾讯云后端入口; 隧道建好后可改回 https://wx.funnycode.cn) */
 const BACKEND_ORIGIN = 'http://124.221.205.79:8080'
+
+/** 版本标记, 用于确认线上运行的 functions 版本 */
+const FN_VERSION = 'fn-v2-20260909'
 
 export async function onRequest(context) {
   const { request } = context
@@ -15,22 +17,40 @@ export async function onRequest(context) {
     return context.next()
   }
 
+  // 探活标记: 用于诊断 functions 是否生效
+  if (url.pathname === '/api/__ping') {
+    return new Response(JSON.stringify({ pong: true, version: FN_VERSION }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
   // 构造后端请求: 保留完整路径与查询参数(后端接口路径本身含 /api 前缀)
   const target = new URL(url.pathname + url.search, BACKEND_ORIGIN)
   const headers = new Headers(request.headers)
   headers.delete('host')
 
-  const upstream = await fetch(new Request(target, {
-    method: request.method,
-    headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-    redirect: 'follow',
-  }))
+  let upstream
+  try {
+    upstream = await fetch(new Request(target, {
+      method: request.method,
+      headers,
+      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      redirect: 'follow',
+    }))
+  } catch (err) {
+    return new Response(JSON.stringify({ proxyError: String(err), version: FN_VERSION }), {
+      status: 502,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
 
   // 透传后端响应(含 CORS 头, 后端 WebMvcConfig 已全放开)
-  return new Response(upstream.body, {
+  const resp = new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: upstream.headers,
   })
+  resp.headers.set('x-fn-version', FN_VERSION)
+  return resp
 }
