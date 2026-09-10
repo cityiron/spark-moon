@@ -3,10 +3,10 @@
 // 参考: https://developers.cloudflare.com/pages/functions/
 
 /** 后端目标地址(腾讯云后端入口; 隧道建好后可改回 https://wx.funnycode.cn) */
-const BACKEND_ORIGIN = 'http://124.221.205.79:8080'
+const BACKEND_ORIGIN = 'http://origin.funnycode.cn:8080'
 
 /** 版本标记, 用于确认线上运行的 functions 版本 */
-const FN_VERSION = 'fn-v2-20260909'
+const FN_VERSION = 'fn-v3-origin-domain'
 
 export async function onRequest(context) {
   const { request } = context
@@ -20,29 +20,6 @@ export async function onRequest(context) {
   // 探活标记: 用于诊断 functions 是否生效
   if (url.pathname === '/api/__ping') {
     return new Response(JSON.stringify({ pong: true, version: FN_VERSION }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })
-  }
-
-  // 出站 fetch 诊断: 对比公网 HTTPS / 后端裸 IP 的可达性
-  if (url.pathname === '/api/__fetchtest') {
-    const probe = async (target) => {
-      try {
-        const r = await fetch(target, { redirect: 'manual' })
-        const text = (await r.text()).slice(0, 120)
-        return { target, status: r.status, body: text }
-      } catch (err) {
-        return { target, error: String(err) }
-      }
-    }
-    const results = await Promise.all([
-      probe('https://example.com/'),
-      probe('http://124.221.205.79:8080/api/booking/venues'),
-      probe('http://124.221.205.79.nip.io:8080/api/booking/venues'),
-      probe('http://124.221.205.79.sslip.io:8080/api/booking/venues'),
-    ])
-    return new Response(JSON.stringify({ version: FN_VERSION, results }, null, 2), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })
