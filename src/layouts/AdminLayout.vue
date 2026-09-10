@@ -125,6 +125,7 @@ import {
   UsergroupAddOutlined,
   ProfileOutlined,
   FlagOutlined,
+  TrophyOutlined,
   SwapOutlined,
   DownOutlined,
 } from '@ant-design/icons-vue'
@@ -233,6 +234,11 @@ const menuItems = computed<ItemType[]>(() => {
       key: '/activity',
       icon: () => h(FlagOutlined),
       label: '活动管理',
+    },
+    {
+      key: '/club',
+      icon: () => h(TrophyOutlined),
+      label: '俱乐部管理',
     },
     {
       key: '/finance',

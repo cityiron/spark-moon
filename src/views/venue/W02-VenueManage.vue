@@ -746,6 +746,8 @@ async function saveVenueInfo() {
       closeTime: venueForm.closeTime,
       intro: venueForm.intro,
       acceptPlatformCard: venueForm.acceptPlatformCard,
+      coverImage: venueForm.coverImage,
+      floorPlan: venueForm.floorPlan,
     })
     message.success('基本信息已保存')
   } finally {
@@ -760,6 +762,7 @@ async function saveIntro() {
       description: venueForm.description,
       traffic: venueForm.traffic,
       facilities: venueForm.facilities,
+      coverImage: venueForm.coverImage,
       floorPlan: venueForm.floorPlan,
     })
     message.success('球馆介绍已保存')

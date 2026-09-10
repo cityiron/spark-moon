@@ -88,6 +88,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '活动管理', icon: 'FlagOutlined' },
       },
       {
+        path: 'club',
+        name: 'ClubManage',
+        component: () => import('@/views/club/W15-ClubManage.vue'),
+        meta: { title: '俱乐部管理', icon: 'TrophyOutlined' },
+      },
+      {
         path: 'finance',
         name: 'FinanceManage',
         component: () => import('@/views/finance/W13-FinanceManage.vue'),
@@ -128,6 +134,7 @@ export const ROLE_MENUS: Record<string, string[]> = {
   '/training': ['super_admin', 'admin', 'coach', 'operator'], // 培训课程管理
   '/schedule': ['super_admin', 'admin', 'coach', 'operator'], // 课时排课
   '/activity': ['super_admin', 'admin', 'operator'], // 活动管理
+  '/club': ['super_admin'], // 俱乐部管理（官方认证仅平台超管）
   '/finance': ['super_admin', 'admin'], // 财务管理
 }
 
