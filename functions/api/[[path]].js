@@ -25,6 +25,28 @@ export async function onRequest(context) {
     })
   }
 
+  // 出站 fetch 诊断: 对比公网 HTTPS / 后端裸 IP 的可达性
+  if (url.pathname === '/api/__fetchtest') {
+    const probe = async (target) => {
+      try {
+        const r = await fetch(target, { redirect: 'manual' })
+        const text = (await r.text()).slice(0, 120)
+        return { target, status: r.status, body: text }
+      } catch (err) {
+        return { target, error: String(err) }
+      }
+    }
+    const results = await Promise.all([
+      probe('https://example.com/'),
+      probe('http://124.221.205.79:8080/api/booking/venues'),
+      probe('http://124.221.205.79:80/api/booking/venues'),
+    ])
+    return new Response(JSON.stringify({ version: FN_VERSION, results }, null, 2), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
   // 构造后端请求: 保留完整路径与查询参数(后端接口路径本身含 /api 前缀)
   const target = new URL(url.pathname + url.search, BACKEND_ORIGIN)
   const headers = new Headers(request.headers)
