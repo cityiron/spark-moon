@@ -16,6 +16,22 @@ export interface UserInfo {
   email?: string
   roles: string[]
   permissions: string[]
+  /** 当前激活的经营者主体 ID (super_admin 为 null/undefined) */
+  activeOperatorId?: string | number | null
+  /** 可切换的经营者主体列表 */
+  operators?: OperatorScope[]
+}
+
+/** 管理端账号可访问的经营者主体(用于顶部主体切换) */
+export interface OperatorScope {
+  /** 经营者主体 ID(雪花大整数) */
+  operatorId: string | number
+  /** 经营者名称 */
+  operatorName: string
+  /** 该账号在该主体下的角色 */
+  role: AdminRole
+  /** 是否默认主体 */
+  isDefault?: boolean
 }
 
 /** 场馆设施类型 */
@@ -65,6 +81,8 @@ export interface Venue {
   traffic?: string
   /** 封面图 URL */
   coverImage?: string
+  /** 场地平面图 URL（球馆详情展示） */
+  floorPlan?: string
   /** 球馆相册（最多 9 张） */
   images?: string[]
 }
@@ -694,7 +712,7 @@ export interface VenueFinanceSummary {
 
 // ==================== 经营者入驻 / 账号管理 ====================
 export type OperatorStatus = 'pending' | 'approved' | 'rejected'
-export type AdminRole = 'super_admin' | 'operator' | 'admin' | 'coach' | 'staff'
+export type AdminRole = 'super_admin' | 'operator' | 'admin' | 'coach' | 'front_desk' | 'partner' | 'staff'
 export type AccountStatus = 'active' | 'disabled'
 
 /** 经营者入驻申请 */

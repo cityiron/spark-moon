@@ -116,7 +116,8 @@ const WHITE_LIST = ['/login']
 // key: 菜单路径 → 可访问角色 (与 AdminLayout 菜单一致)
 // 经营者(operator)可访问球馆管理 / 场地预订 / 会员管理(仅自己俱乐部数据)
 export const ROLE_MENUS: Record<string, string[]> = {
-  '/operator': ['super_admin'], // 账号管理: 仅平台超管
+  // 账号管理: 平台超管 + 经营者(可在自己主体下添加/管理账号)
+  '/operator': ['super_admin', 'operator'],
   '/venue': ['super_admin', 'operator', 'admin'], // 球馆管理
   '/booking': ['super_admin', 'operator', 'admin', 'staff'], // 场地预订
   '/orders': ['super_admin', 'operator', 'admin', 'staff'], // 订单管理(统一订单列表)

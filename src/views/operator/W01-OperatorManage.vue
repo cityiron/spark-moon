@@ -1,12 +1,12 @@
 <template>
   <div class="page-container">
     <!-- 顶部统计卡 -->
-    <div class="stats-row">
-      <div class="stat-card">
+    <div class="stats-row" :class="{ 'stats-single': !isSuperAdmin }">
+      <div v-if="isSuperAdmin" class="stat-card">
         <div class="stat-label">待审核申请</div>
         <div class="stat-value text-warning">{{ stats.pendingCount }}</div>
       </div>
-      <div class="stat-card">
+      <div v-if="isSuperAdmin" class="stat-card">
         <div class="stat-label">已通过经营者</div>
         <div class="stat-value text-primary">{{ stats.approvedCount }}</div>
       </div>
@@ -14,7 +14,7 @@
         <div class="stat-label">已创建账号</div>
         <div class="stat-value">{{ stats.accountCount }}</div>
       </div>
-      <div class="stat-card">
+      <div v-if="isSuperAdmin" class="stat-card">
         <div class="stat-label">已配置商户号</div>
         <div class="stat-value text-success">{{ stats.mchConfiguredCount }}</div>
       </div>
@@ -22,8 +22,8 @@
 
     <div class="page-card">
       <a-tabs v-model:activeKey="tab" type="card">
-        <!-- ========== Tab 1: 入驻申请审核 ========== -->
-        <a-tab-pane key="application" tab="入驻申请">
+        <!-- ========== Tab 1: 入驻申请审核 (仅平台超管) ========== -->
+        <a-tab-pane v-if="isSuperAdmin" key="application" tab="入驻申请">
           <div class="table-toolbar">
             <div class="table-toolbar-left">
               <a-input-search
@@ -118,7 +118,7 @@
               />
               <a-button @click="resetAccQuery">重置</a-button>
             </div>
-            <a-button type="primary" @click="openCreateAccount">
+            <a-button v-if="canCreateAccount" type="primary" @click="openCreateAccount">
               <plus-outlined />
               新建账号
             </a-button>
@@ -265,7 +265,7 @@
       @ok="confirmSaveAccount"
     >
       <a-form ref="accountFormRef" :model="accountForm" :rules="accountRules" layout="vertical">
-        <a-form-item label="所属经营者" name="operatorId">
+        <a-form-item v-if="isSuperAdmin" label="所属经营者" name="operatorId">
           <a-select
             v-model:value="accountForm.operatorId"
             placeholder="请选择经营者"
@@ -297,7 +297,7 @@
           />
         </a-form-item>
         <a-form-item label="角色" name="role">
-          <a-select v-model:value="accountForm.role" :options="roleOptions" />
+          <a-select v-model:value="accountForm.role" :options="accountRoleOptions" />
         </a-form-item>
         <a-form-item label="关联球馆" name="venueIds">
           <a-select
@@ -313,11 +313,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted, h } from 'vue'
+import { reactive, ref, computed, onMounted, h } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import type { TableColumnsType, FormInstance } from 'ant-design-vue'
 import { PlusOutlined, UploadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { useTable } from '@/composables/useTable'
+import { useAuthStore } from '@/stores/auth'
 import {
   getOperatorList,
   getOperatorStats,
@@ -344,8 +345,16 @@ import type {
 
 defineOptions({ name: 'OperatorManage' })
 
+const authStore = useAuthStore()
+
+/** 是否平台超级管理员 */
+const isSuperAdmin = computed(() => authStore.roles.includes('super_admin'))
+/** 是否有创建账号权限: 平台超管或经营者(在其主体下) */
+const canCreateAccount = computed(() => isSuperAdmin.value || authStore.roles.includes('operator'))
+
 // ==================== Tab 切换 ====================
-const tab = ref<'application' | 'account'>('application')
+// 非超管(经营者)只展示账号管理
+const tab = ref<'application' | 'account'>(isSuperAdmin.value ? 'application' : 'account')
 
 // ==================== 统计 ====================
 const stats = reactive<Stats>({
@@ -423,19 +432,52 @@ function statusLabel(s: string) {
   return statusOptions.find((o) => o.value === s)?.label || s
 }
 
-const roleOptions = [
+// 角色可选项: 经营者仅可分配 admin/coach/front_desk/partner/staff, 超管额外可分配 operator
+const ROLE_OPTIONS: { value: AdminRole, label: string }[] = [
   { value: 'operator', label: '经营者' },
   { value: 'admin', label: '管理员' },
   { value: 'coach', label: '教练' },
+  { value: 'front_desk', label: '前台' },
+  { value: 'partner', label: '合伙人' },
   { value: 'staff', label: '工作人员' },
 ]
 
+const ASSIGNABLE_BY_OPERATOR: AdminRole[] = ['admin', 'coach', 'front_desk', 'partner', 'staff']
+
+/** 账号表单角色下拉: 经营者只显示可分配角色 */
+const accountRoleOptions = computed(() =>
+  isSuperAdmin.value
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((o) => ASSIGNABLE_BY_OPERATOR.includes(o.value)),
+)
+
+/** 账号列表角色筛选项(与可分配角色一致) */
+const roleOptions = computed(() => accountRoleOptions.value)
+
 function roleColor(r: AdminRole) {
-  return { super_admin: 'red', operator: 'purple', admin: 'blue', coach: 'green', staff: 'default' }[r]
+  return {
+    super_admin: 'red',
+    operator: 'purple',
+    admin: 'blue',
+    coach: 'green',
+    front_desk: 'cyan',
+    partner: 'gold',
+    staff: 'default',
+  }[r]
 }
 
 function roleLabel(r: AdminRole) {
-  return { super_admin: '超级管理员', operator: '经营者', admin: '管理员', coach: '教练', staff: '工作人员' }[r] || r
+  return (
+    {
+      super_admin: '超级管理员',
+      operator: '经营者',
+      admin: '管理员',
+      coach: '教练',
+      front_desk: '前台',
+      partner: '合伙人',
+      staff: '工作人员',
+    }[r] || r
+  )
 }
 
 const accountStatusOptions = [
@@ -597,11 +639,10 @@ async function loadOperatorOptions() {
   }
 }
 
-async function onOperatorChange(operatorId: string | number) {
-  // 加载该经营者名下球馆
+async function onOperatorChange(_operatorId?: string | number) {
+  // 加载该经营者名下球馆 (后端按当前数据权限返回)
   try {
     const venues = await getAllVenues()
-    // mock 下所有球馆都属于一个经营者, 真实场景应按 operatorId 过滤
     venueOptions.value = venues.map((v) => ({ value: v.id, label: v.name }))
   } catch {
     venueOptions.value = []
@@ -610,14 +651,18 @@ async function onOperatorChange(operatorId: string | number) {
 
 function openCreateAccount() {
   editingAccount.value = null
-  accountForm.operatorId = undefined
+  accountForm.operatorId = isSuperAdmin.value ? undefined : (authStore.activeOperatorId ?? undefined)
   accountForm.username = ''
   accountForm.nickname = ''
   accountForm.phone = ''
   accountForm.password = ''
   accountForm.role = 'admin'
   accountForm.venueIds = []
-  loadOperatorOptions()
+  if (isSuperAdmin.value) {
+    loadOperatorOptions()
+  } else {
+    onOperatorChange()
+  }
   accountVisible.value = true
 }
 
@@ -630,8 +675,10 @@ function openEditAccount(record: AdminAccount) {
   accountForm.password = ''
   accountForm.role = record.role
   accountForm.venueIds = [...record.venueIds]
-  loadOperatorOptions()
-  onOperatorChange(record.operatorId)
+  if (isSuperAdmin.value) {
+    loadOperatorOptions()
+  }
+  onOperatorChange()
   accountVisible.value = true
 }
 
@@ -734,7 +781,10 @@ const accColumns: TableColumnsType = [
 // ==================== 初始化 ====================
 onMounted(() => {
   loadStats()
-  loadApplications()
+  // 入驻申请列表仅超管可见, 避免经营者账号误请求超管接口
+  if (isSuperAdmin.value) {
+    loadApplications()
+  }
   loadAccounts()
 })
 </script>
@@ -745,6 +795,11 @@ onMounted(() => {
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 16px;
+
+  &.stats-single {
+    grid-template-columns: 1fr;
+    max-width: 320px;
+  }
 }
 
 .stat-card {

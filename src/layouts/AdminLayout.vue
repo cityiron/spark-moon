@@ -41,6 +41,26 @@
           </a-breadcrumb>
         </div>
         <div class="header-right">
+          <!-- 经营者主体切换: 仅非超管且绑定多个主体时显示 -->
+          <a-dropdown v-if="authStore.operatorList.length > 0">
+            <div class="operator-switch">
+              <swap-outlined />
+              <span class="operator-name">{{ authStore.activeOperator?.operatorName || '选择经营者' }}</span>
+              <down-outlined class="operator-caret" />
+            </div>
+            <template #overlay>
+              <a-menu @click="handleSwitchOperator">
+                <a-menu-item
+                  v-for="op in authStore.operatorList"
+                  :key="String(op.operatorId)"
+                >
+                  <swap-outlined />
+                  <span>{{ op.operatorName }}</span>
+                  <span class="operator-role">{{ roleLabel(op.role) }}</span>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
           <a-tooltip title="刷新">
             <a-button type="text" @click="reload">
               <reload-outlined />
@@ -105,6 +125,8 @@ import {
   UsergroupAddOutlined,
   ProfileOutlined,
   FlagOutlined,
+  SwapOutlined,
+  DownOutlined,
 } from '@ant-design/icons-vue'
 import type { ItemType } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -114,6 +136,32 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+
+/** 角色显示名映射 */
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: '超级管理员',
+  operator: '经营者',
+  admin: '管理员',
+  coach: '教练',
+  front_desk: '前台',
+  partner: '合伙人',
+  staff: '工作人员',
+}
+function roleLabel(role?: string) {
+  return (role && ROLE_LABELS[role]) || role || ''
+}
+
+/** 切换经营者主体: 调用后端换取新 token, 成功后整页刷新以按新主体加载数据 */
+async function handleSwitchOperator({ key }: { key: string }) {
+  if (String(key) === String(authStore.activeOperatorId)) return
+  try {
+    await authStore.switchOperator(key)
+    message.success('已切换经营者主体')
+    location.reload()
+  } catch {
+    // 错误已由拦截器提示
+  }
+}
 
 const logoSvg =
   'data:image/svg+xml;base64,' +
@@ -332,6 +380,34 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
+  .operator-switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 0 10px;
+    height: 40px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+    transition: all 0.2s;
+    &:hover {
+      border-color: #059669;
+      background: #f0fdf4;
+    }
+    .operator-name {
+      font-size: 13px;
+      color: #1f2937;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .operator-caret {
+      font-size: 10px;
+      color: #9ca3af;
+    }
+  }
   .user-info {
     display: flex;
     align-items: center;
@@ -376,5 +452,14 @@ async function handleLogout() {
 }
 .page-fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<style lang="scss">
+/* 主体切换下拉: 菜单渲染在 body 下, 需全局样式 */
+.operator-role {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #059669;
 }
 </style>
