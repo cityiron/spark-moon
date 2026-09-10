@@ -46,6 +46,10 @@ service.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // FormData 上传(图片)时移除默认 JSON Content-Type, 由浏览器自动生成 multipart boundary
+    if (config.data instanceof FormData && config.headers) {
+      config.headers.delete('Content-Type')
+    }
     return config
   },
   (error) => Promise.reject(error),

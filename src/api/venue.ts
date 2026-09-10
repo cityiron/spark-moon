@@ -61,6 +61,18 @@ export function deleteVenue(id: IdParam) {
   })
 }
 
+/** 上传图片(七牛云), 返回可访问 URL */
+export function uploadImage(file: File | Blob) {
+  const formData = new FormData()
+  formData.append('file', file)
+  // 不手动设 Content-Type, 由 axios 自动带 boundary
+  return request<string>({
+    url: '/upload/image',
+    method: 'post',
+    data: formData,
+  })
+}
+
 /** 场地相关 */
 export function getVenueCourts(venueId: IdParam) {
   return request<Court[]>({

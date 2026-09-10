@@ -92,17 +92,18 @@
                 <div class="hint-text">开启后，该球馆的顾客可使用平台会员卡享受权益</div>
               </a-form-item>
 
-              <a-form-item label="球馆图片（最多 5 张）">
+              <a-form-item label="球馆展示图片（封面图，首页热门球馆/球馆列表展示）">
                 <a-upload
-                  v-model:file-list="imageFileList"
-                  list-type="picture-card"
-                  :max-count="5"
-                  :before-upload="() => false"
+                  :show-upload-list="false"
+                  :before-upload="handleCoverUpload"
                   accept="image/*"
                 >
-                  <div v-if="imageFileList.length < 5">
+                  <div v-if="venueForm.coverImage" class="img-preview">
+                    <img :src="venueForm.coverImage" alt="封面图" />
+                  </div>
+                  <div v-else class="upload-box">
                     <plus-outlined />
-                    <div class="upload-text">上传图片</div>
+                    <div class="upload-text">上传封面图</div>
                   </div>
                 </a-upload>
               </a-form-item>
@@ -288,17 +289,18 @@
                   placeholder="选择配套设施"
                 />
               </a-form-item>
-              <a-form-item label="球馆相册（最多 9 张）">
+              <a-form-item label="场地平面图（球馆详情展示）">
                 <a-upload
-                  v-model:file-list="albumFileList"
-                  list-type="picture-card"
-                  :max-count="9"
-                  :before-upload="() => false"
+                  :show-upload-list="false"
+                  :before-upload="handleFloorPlanUpload"
                   accept="image/*"
                 >
-                  <div v-if="albumFileList.length < 9">
+                  <div v-if="venueForm.floorPlan" class="img-preview">
+                    <img :src="venueForm.floorPlan" alt="场地平面图" />
+                  </div>
+                  <div v-else class="upload-box">
                     <plus-outlined />
-                    <div class="upload-text">上传图片</div>
+                    <div class="upload-text">上传场地平面图</div>
                   </div>
                 </a-upload>
               </a-form-item>
@@ -531,6 +533,7 @@ import {
   deleteCourt,
   getVenuePriceGroups,
   saveVenuePriceGroups,
+  uploadImage,
 } from '@/api/venue'
 import type {
   Venue,
@@ -657,6 +660,8 @@ const venueForm = reactive<Partial<Venue>>({
   facilities: [],
   status: 1,
   acceptPlatformCard: 0,
+  coverImage: '',
+  floorPlan: '',
 })
 const venueRules = {
   name: [{ required: true, message: '请输入球馆名称', trigger: 'blur' }],
@@ -666,9 +671,28 @@ const venueRules = {
   closeTime: [{ required: true, message: '请选择营业结束时间', trigger: 'change' }],
 }
 
-// 球馆图片（信息Tab）与相册（介绍Tab），暂用本地 fileList 占位，不实际上传
-const imageFileList = ref<UploadFile[]>([])
-const albumFileList = ref<UploadFile[]>([])
+// 封面图 / 场地平面图上传(七牛云): 选图即传, 成功后保存 URL 到表单
+async function handleCoverUpload(file: File) {
+  try {
+    const url = await uploadImage(file)
+    venueForm.coverImage = url
+    message.success('封面图上传成功')
+  } catch {
+    // 拦截器已提示错误
+  }
+  return false
+}
+
+async function handleFloorPlanUpload(file: File) {
+  try {
+    const url = await uploadImage(file)
+    venueForm.floorPlan = url
+    message.success('场地平面图上传成功')
+  } catch {
+    // 拦截器已提示错误
+  }
+  return false
+}
 
 async function loadVenueDetail() {
   if (!currentVenueId.value) return
@@ -688,6 +712,8 @@ async function loadVenueDetail() {
       facilities: [...(detail.facilities || [])],
       status: detail.status,
       acceptPlatformCard: detail.acceptPlatformCard ?? 0,
+      coverImage: detail.coverImage || '',
+      floorPlan: detail.floorPlan || '',
     })
     // 同步加载场地与价格
     loadCourts()
@@ -734,6 +760,7 @@ async function saveIntro() {
       description: venueForm.description,
       traffic: venueForm.traffic,
       facilities: venueForm.facilities,
+      floorPlan: venueForm.floorPlan,
     })
     message.success('球馆介绍已保存')
   } finally {
@@ -1274,6 +1301,39 @@ onMounted(() => {
   font-size: 12px;
   color: #94a3b8;
   margin-top: 4px;
+}
+
+.img-preview {
+  width: 220px;
+  height: 140px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.upload-box {
+  width: 220px;
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  &:hover {
+    border-color: #1890ff;
+    color: #1890ff;
+  }
 }
 
 .price-form {
