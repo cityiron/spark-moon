@@ -30,6 +30,19 @@ export async function onRequest(context) {
   const headers = new Headers(request.headers)
   headers.delete('host')
 
+  // 必须剥掉 Cloudflare 边缘注入的头(cf-*, x-forwarded-*, cdn-loop 等):
+  // 携带 cf-worker 等头的子请求会被 CF 边缘当作同 zone 请求拦截, 对裸 IP 目标直接报 1003
+  const clientIp = request.headers.get('cf-connecting-ip')
+  for (const key of [...headers.keys()]) {
+    const k = key.toLowerCase()
+    if (k.startsWith('cf-') || k.startsWith('x-forwarded') || k === 'x-real-ip' || k === 'cdn-loop' || k === 'true-client-ip') {
+      headers.delete(key)
+    }
+  }
+  if (clientIp) {
+    headers.set('x-forwarded-for', clientIp)
+  }
+
   let upstream
   try {
     upstream = await fetch(new Request(target, {
