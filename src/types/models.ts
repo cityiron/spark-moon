@@ -227,8 +227,12 @@ export interface CourtLock {
   reason: string
   /** 锁定类型: lock 锁定, training 培训 */
   type: 'lock' | 'training'
+  /** 后端实体序列化字段(MAINTENANCE/TRAINING, 编辑详情接口返回) */
+  lockType?: 'MAINTENANCE' | 'TRAINING'
   /** 重复类型: once 单次, daily 每天, weekly 每周 */
   repeatType?: LockRepeatType
+  /** 每周重复的星期(1-7, 逗号分隔, 仅 repeatType=weekly 有效, 如 "2,4"=每周二、四) */
+  weekdays?: string
 }
 
 /** 时间段网格单元格 */
@@ -251,6 +255,8 @@ export interface TimeSlot {
   lockId?: string | number
   /** 锁定原因(仅 locked/training 有值) */
   lockReason?: string
+  /** 锁定重复文本(仅重复锁定有值, 如 "每周二、四重复") */
+  lockRepeat?: string
 }
 
 /** 场地网格行 */

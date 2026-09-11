@@ -49,6 +49,23 @@ export function unlockCourt(id: IdParam) {
   })
 }
 
+/** 查询锁定详情(编辑预填) */
+export function getLockDetail(id: IdParam) {
+  return request<CourtLock>({
+    url: `/booking/lock/${id}`,
+    method: 'get',
+  })
+}
+
+/** 编辑场地锁定 */
+export function updateLock(id: IdParam, data: CourtLock) {
+  return request<CourtLock>({
+    url: `/booking/lock/${id}`,
+    method: 'put',
+    data,
+  })
+}
+
 /** 取消预订 */
 export function cancelBooking(id: IdParam) {
   return request<void>({

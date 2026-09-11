@@ -201,7 +201,7 @@
     <!-- 场地锁定 Drawer -->
     <a-drawer
       v-model:open="lockDrawerOpen"
-      title="场地锁定 / 培训占用"
+      :title="editingLockId != null ? '编辑场地锁定' : '场地锁定 / 培训占用'"
       width="460"
       :destroy-on-close="true"
     >
@@ -265,6 +265,19 @@
             <a-radio-button value="daily">每天</a-radio-button>
           </a-radio-group>
         </a-form-item>
+        <a-form-item v-if="lockForm.repeatType === 'weekly'" label="重复星期" name="weekdays">
+          <a-checkbox-group v-model:value="lockForm.weekdays" :options="WEEK_OPTIONS" style="width: 100%" />
+          <div style="font-size: 12px; color: #999; margin-top: 4px">从所选日期所在周的下一周起，每周按勾选星期重复锁定，长期有效（可手动释放）</div>
+        </a-form-item>
+        <a-form-item v-else-if="lockForm.repeatType === 'daily'" label="重复说明" style="margin-bottom: 24px">
+          <div style="font-size: 12px; color: #999">从所选日期起每天重复锁定，长期有效（可手动释放）</div>
+        </a-form-item>
+        <a-form-item v-if="lockRangeHints.length" label="整段一口价时段">
+          <div style="font-size: 12px; color: #999">
+            以下时段为整段一口价不可拆分，如需锁定须整段锁定：
+            <a-tag v-for="rk in lockRangeHints" :key="rk" color="orange" style="margin-top: 4px">{{ rk }}</a-tag>
+          </div>
+        </a-form-item>
         <a-form-item label="原因" name="reason">
           <a-textarea
             v-model:value="lockForm.reason"
@@ -276,7 +289,7 @@
       <template #footer>
         <div style="text-align: right">
           <a-button style="margin-right: 8px" @click="lockDrawerOpen = false">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="submitLock">确认锁定</a-button>
+          <a-button type="primary" :loading="submitting" @click="submitLock">{{ editingLockId != null ? '保存修改' : '确认锁定' }}</a-button>
         </div>
       </template>
     </a-drawer>
@@ -334,6 +347,9 @@
         <a-descriptions-item label="场地">{{ currentLock.courtName }}</a-descriptions-item>
         <a-descriptions-item label="日期">{{ currentLock.date }}</a-descriptions-item>
         <a-descriptions-item label="时段">{{ currentLock.time }}</a-descriptions-item>
+        <a-descriptions-item v-if="currentLock.lockRepeat" label="重复规则">
+          <a-tag color="blue">{{ currentLock.lockRepeat }}</a-tag>
+        </a-descriptions-item>
         <a-descriptions-item label="类型">
           <a-tag :color="currentLock.lockStatus === 'training' ? 'purple' : 'orange'">
             {{ currentLock.lockStatus === 'training' ? '培训占用' : '场地锁定' }}
@@ -350,6 +366,7 @@
           message="培训占用由排课自动锁定时，请到「排课管理」取消对应排课来释放；手动设置的培训占用可直接在此释放。"
         />
         <div style="text-align: right">
+          <a-button v-if="currentLock.editable" style="margin-right: 8px" @click="openEditLock">编辑</a-button>
           <a-popconfirm
             title="确认释放该场地锁定? 释放后该时段恢复可预订"
             ok-text="确认释放"
@@ -376,7 +393,7 @@ import {
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getAllVenues } from '@/api/venue'
-import { getBookingGrid, proxyBooking, lockCourt, unlockCourt, adminCancelBooking, verifyBooking } from '@/api/booking'
+import { getBookingGrid, proxyBooking, lockCourt, unlockCourt, getLockDetail, updateLock, adminCancelBooking, verifyBooking } from '@/api/booking'
 import type { Venue, Court, CourtGridRow, TimeSlot, BookingOrder, LockRepeatType } from '@/types/models'
 
 // ===== 场馆选择 =====
@@ -472,14 +489,18 @@ function onCellClick(row: CourtGridRow, slot: TimeSlot) {
     orderModalOpen.value = true
   } else if (slot.status === 'locked' || slot.status === 'training') {
     if (slot.lockId) {
-      // 已锁定/培训 -> 显示锁定详情, 支持释放
+      // 已锁定/培训 -> 显示锁定详情, 支持编辑/释放
+      // 排课自动生成的培训占用(原因以 TRAINING_SESSION: 开头)不可在此编辑/释放
+      const autoTraining = (slot.lockReason || '').startsWith('TRAINING_SESSION:')
       currentLock.value = {
         lockId: slot.lockId,
         lockReason: slot.lockReason,
         lockStatus: slot.status,
+        lockRepeat: slot.lockRepeat,
         courtName: row.court.name,
         date: selectedDate.value,
         time: `${slot.startTime} - ${slot.endTime}`,
+        editable: !autoTraining,
       }
       lockModalOpen.value = true
     }
@@ -747,16 +768,66 @@ const lockForm = reactive({
   endTime: '',
   reason: '',
   repeatType: 'once' as 'once' | 'daily' | 'weekly',
+  weekdays: [] as string[],
 })
+const WEEK_OPTIONS = [
+  { label: '周一', value: '1' },
+  { label: '周二', value: '2' },
+  { label: '周三', value: '3' },
+  { label: '周四', value: '4' },
+  { label: '周五', value: '5' },
+  { label: '周六', value: '6' },
+  { label: '周日', value: '7' },
+]
+const WEEK_MAP: Record<string, string> = Object.fromEntries(WEEK_OPTIONS.map(o => [o.value, o.label]))
+
+/** 当前所选场地的 RANGE 整段一口价时段列表(来自网格 rangeKey, 如 ["18:00-20:00"]) */
+const lockRangeHints = computed<string[]>(() => {
+  const row = gridRows.value.find((r) => r.court.id === lockForm.courtId)
+  if (!row) return []
+  const ranges = new Set<string>()
+  row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
+  return [...ranges]
+})
+
+/**
+ * 锁定时段与 RANGE 整段一口价部分重叠(有交集且未完整覆盖)时返回冲突段文本(如 "18:00-20:00"),
+ * 无冲突返回 null。HH:mm 字符串按字典序比较结果与时间顺序一致。
+ */
+function findRangeOverlap(start: string, end: string): string | null {
+  const row = gridRows.value.find((r) => r.court.id === lockForm.courtId)
+  if (!row) return null
+  const ranges = new Set<string>()
+  row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
+  for (const rk of ranges) {
+    const [rs, re] = rk.split('-')
+    const overlap = start < re && end > rs
+    const fullCover = start <= rs && end >= re
+    if (overlap && !fullCover) return rk
+  }
+  return null
+}
 const lockRules = {
   courtId: [{ required: true, message: '请选择场地', trigger: 'change' }],
   date: [{ required: true, message: '请选择日期', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
   reason: [{ required: true, message: '请输入原因', trigger: 'blur' }],
+  weekdays: [
+    {
+      validator: (_rule: unknown, value: string[]) => {
+        if (lockForm.repeatType === 'weekly' && (!value || value.length === 0)) {
+          return Promise.reject(new Error('请至少选择一个星期'))
+        }
+        return Promise.resolve()
+      },
+      trigger: 'change',
+    },
+  ],
 }
 
 function openLockForm() {
+  editingLockId.value = null
   Object.assign(lockForm, {
     type: 'lock',
     courtId: undefined,
@@ -766,41 +837,88 @@ function openLockForm() {
     endTime: '',
     reason: '',
     repeatType: 'once',
+    weekdays: [],
   })
   lockDrawerOpen.value = true
 }
 
 async function submitLock() {
   await lockFormRef.value?.validate()
+  // 锁定时段不得与整段一口价部分重叠(前端即时提醒, 后端也会硬校验)
+  if (lockForm.startTime && lockForm.endTime) {
+    const conflict = findRangeOverlap(lockForm.startTime, lockForm.endTime)
+    if (conflict) {
+      message.error(`锁定时段与整段一口价 ${conflict} 部分重叠，需整段锁定该时段或完全不锁该段`)
+      return
+    }
+  }
   submitting.value = true
   try {
-    await lockCourt({
+    const payload = {
       ...lockForm,
       venueId: selectedVenueId.value!,
       courtId: lockForm.courtId!,
       repeatType: lockForm.repeatType,
-    })
-    const repeatText = lockForm.repeatType === 'once' ? '' : `（${lockForm.repeatType === 'daily' ? '每天' : '每周'}重复）`
-    message.success((lockForm.type === 'training' ? '培训占用已设置' : '场地已锁定') + repeatText)
+      weekdays: lockForm.repeatType === 'weekly' ? [...lockForm.weekdays].sort().join(',') : undefined,
+    }
+    if (editingLockId.value != null) {
+      await updateLock(editingLockId.value, payload)
+      message.success('锁定已更新')
+    } else {
+      await lockCourt(payload)
+      let repeatText = ''
+      if (lockForm.repeatType === 'daily') {
+        repeatText = '（每天重复）'
+      } else if (lockForm.repeatType === 'weekly') {
+        const days = [...lockForm.weekdays].sort().map(w => WEEK_MAP[w]).join('、')
+        repeatText = `（每周${days}重复，从下一周起生效）`
+      }
+      message.success((lockForm.type === 'training' ? '培训占用已设置' : '场地已锁定') + repeatText)
+    }
     lockDrawerOpen.value = false
+    editingLockId.value = null
     loadGrid()
   } finally {
     submitting.value = false
   }
 }
 
-// ===== 释放锁定 =====
+// ===== 释放/编辑锁定 =====
 interface LockDetail {
   lockId: string | number
   lockReason?: string
   lockStatus: 'locked' | 'training'
+  lockRepeat?: string
   courtName: string
   date: string
   time: string
+  /** 是否可编辑/释放(排课自动生成的培训占用为 false) */
+  editable: boolean
 }
 const lockModalOpen = ref(false)
 const currentLock = ref<LockDetail | null>(null)
 const releasing = ref(false)
+/** 当前正在编辑的锁定ID, null 表示新建 */
+const editingLockId = ref<string | number | null>(null)
+
+async function openEditLock() {
+  if (!currentLock.value) return
+  const detail = await getLockDetail(currentLock.value.lockId)
+  editingLockId.value = detail.id ?? currentLock.value.lockId
+  Object.assign(lockForm, {
+    type: detail.lockType === 'TRAINING' ? 'training' : 'lock',
+    courtId: detail.courtId,
+    venueId: detail.venueId,
+    date: detail.date,
+    startTime: detail.startTime,
+    endTime: detail.endTime,
+    reason: detail.reason || '',
+    repeatType: detail.repeatType || 'once',
+    weekdays: detail.weekdays ? detail.weekdays.split(',').filter(Boolean) : [],
+  })
+  lockModalOpen.value = false
+  lockDrawerOpen.value = true
+}
 
 async function handleReleaseLock() {
   if (!currentLock.value) return
