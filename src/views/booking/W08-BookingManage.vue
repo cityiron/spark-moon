@@ -50,8 +50,9 @@
       <div class="legend-bar">
         <span class="legend-item"><i class="dot dot-free"></i>空闲</span>
         <span class="legend-item"><i class="dot dot-booked"></i>已预订</span>
-        <span class="legend-item"><i class="dot dot-locked"></i>已锁定</span>
+        <span class="legend-item"><i class="dot dot-locked"></i>已锁定(维护)</span>
         <span class="legend-item"><i class="dot dot-training"></i>培训</span>
+        <span class="legend-item"><i class="dot dot-activity"></i>活动(已预订)</span>
         <span class="legend-item"><i class="dot dot-expired"></i>已结束</span>
       </div>
 
@@ -90,6 +91,7 @@
                   </a-tooltip>
                   <span v-else-if="slot.status === 'locked'" class="slot-text">锁定</span>
                   <span v-else-if="slot.status === 'training'" class="slot-text">培训</span>
+                  <span v-else-if="slot.status === 'activity'" class="slot-text">活动</span>
                   <span v-else-if="slot.status === 'expired'" class="slot-text">已结束</span>
                   <span v-else-if="slot.rangeKey" class="slot-range-label">
                     {{ isRangeStart(row.slots, si) ? `整段 ¥${fmtPrice(slot.price)}` : '↔' }}
@@ -201,7 +203,7 @@
     <!-- 场地锁定 Drawer -->
     <a-drawer
       v-model:open="lockDrawerOpen"
-      :title="editingLockId != null ? '编辑场地锁定' : '场地锁定 / 培训占用'"
+      :title="editingLockId != null ? '编辑场地锁定' : '场地锁定 / 培训占用 / 活动占用'"
       width="460"
       :destroy-on-close="true"
     >
@@ -213,8 +215,9 @@
       >
         <a-form-item label="锁定类型" name="type">
           <a-radio-group v-model:value="lockForm.type">
-            <a-radio value="lock">场地锁定</a-radio>
+            <a-radio value="lock">场地锁定（维护）</a-radio>
             <a-radio value="training">培训占用</a-radio>
+            <a-radio value="activity">活动占用（已预订）</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-form-item label="场地" name="courtId">
@@ -351,8 +354,8 @@
           <a-tag color="blue">{{ currentLock.lockRepeat }}</a-tag>
         </a-descriptions-item>
         <a-descriptions-item label="类型">
-          <a-tag :color="currentLock.lockStatus === 'training' ? 'purple' : 'orange'">
-            {{ currentLock.lockStatus === 'training' ? '培训占用' : '场地锁定' }}
+          <a-tag :color="currentLock.lockStatus === 'training' ? 'purple' : currentLock.lockStatus === 'activity' ? 'blue' : 'orange'">
+            {{ currentLock.lockStatus === 'training' ? '培训占用' : currentLock.lockStatus === 'activity' ? '活动占用(已预订)' : '场地锁定(维护)' }}
           </a-tag>
         </a-descriptions-item>
         <a-descriptions-item label="原因">{{ currentLock.lockReason || '-' }}</a-descriptions-item>
@@ -887,7 +890,7 @@ async function submitLock() {
 interface LockDetail {
   lockId: string | number
   lockReason?: string
-  lockStatus: 'locked' | 'training'
+  lockStatus: 'locked' | 'training' | 'activity'
   lockRepeat?: string
   courtName: string
   date: string
@@ -906,7 +909,7 @@ async function openEditLock() {
   const detail = await getLockDetail(currentLock.value.lockId)
   editingLockId.value = detail.id ?? currentLock.value.lockId
   Object.assign(lockForm, {
-    type: detail.lockType === 'TRAINING' ? 'training' : 'lock',
+    type: detail.lockType === 'TRAINING' ? 'training' : detail.lockType === 'ACTIVITY' ? 'activity' : 'lock',
     courtId: detail.courtId,
     venueId: detail.venueId,
     date: detail.date,
@@ -985,6 +988,9 @@ onMounted(() => {
     }
     &.dot-training {
       background: #ede9fe;
+    }
+    &.dot-activity {
+      background: #dbeafe;
     }
     &.dot-expired {
       background: #f5f5f5;

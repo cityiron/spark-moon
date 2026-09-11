@@ -172,7 +172,7 @@ export type BookingStatus =
   | 'absent'
 
 /** 单元格占用类型(用于网格视图) */
-export type SlotStatus = 'free' | 'booked' | 'locked' | 'training' | 'expired'
+export type SlotStatus = 'free' | 'booked' | 'locked' | 'training' | 'activity' | 'expired'
 
 /** 预订订单 */
 export interface BookingOrder {
@@ -225,10 +225,10 @@ export interface CourtLock {
   endTime: string
   /** 锁定原因 */
   reason: string
-  /** 锁定类型: lock 锁定, training 培训 */
-  type: 'lock' | 'training'
-  /** 后端实体序列化字段(MAINTENANCE/TRAINING, 编辑详情接口返回) */
-  lockType?: 'MAINTENANCE' | 'TRAINING'
+  /** 锁定类型: lock 锁定(维护), training 培训, activity 活动 */
+  type: 'lock' | 'training' | 'activity'
+  /** 后端实体序列化字段(MAINTENANCE/TRAINING/ACTIVITY, 编辑详情接口返回) */
+  lockType?: 'MAINTENANCE' | 'TRAINING' | 'ACTIVITY'
   /** 重复类型: once 单次, daily 每天, weekly 每周 */
   repeatType?: LockRepeatType
   /** 每周重复的星期(1-7, 逗号分隔, 仅 repeatType=weekly 有效, 如 "2,4"=每周二、四) */
@@ -251,9 +251,9 @@ export interface TimeSlot {
   price?: number
   /** 关联订单(若已预订) */
   order?: BookingOrder
-  /** 关联锁定ID(仅 locked/training 有值, 雪花ID为字符串) */
+  /** 关联锁定ID(仅 locked/training/activity 有值, 雪花ID为字符串) */
   lockId?: string | number
-  /** 锁定原因(仅 locked/training 有值) */
+  /** 锁定原因(仅 locked/training/activity 有值) */
   lockReason?: string
   /** 锁定重复文本(仅重复锁定有值, 如 "每周二、四重复") */
   lockRepeat?: string
