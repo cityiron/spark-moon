@@ -322,6 +322,9 @@
         <a-form-item label="上架状态">
           <a-switch v-model:checked="form.isVisible" checked-children="上架" un-checked-children="下架" />
         </a-form-item>
+        <a-form-item label="首页热门" extra="热门活动优先展示在首页">
+          <a-switch v-model:checked="form.isHot" checked-children="热门" un-checked-children="普通" />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -1001,6 +1004,7 @@ const form = reactive<ActivityAdminSave & { operatorId?: string }>({
   status: '报名中',
   repeatEnabled: false,
   weekdays: [] as number[],
+  isHot: false,
 })
 
 const rules = {
@@ -1038,6 +1042,7 @@ function openCreate() {
     status: '报名中',
     repeatEnabled: false,
     weekdays: [],
+    isHot: false,
   })
   formOpen.value = true
 }
@@ -1071,6 +1076,7 @@ function openEdit(record: ActivityAdminItem) {
     status: record.status || '报名中',
     repeatEnabled: false,
     weekdays: [],
+    isHot: !!record.isHot,
   })
   formOpen.value = true
 }
@@ -1115,6 +1121,7 @@ async function handleSave() {
       contactWechat: form.contactWechat,
       isVisible: !!form.isVisible,
       status: form.status || '报名中',
+      isHot: !!form.isHot,
       // 每周重复仅新增生效(创建长期延续系列)；编辑期次不展开，保持原系列
       repeatEnabled: !editing.value && !!form.repeatEnabled,
       weekdays: !editing.value && form.repeatEnabled ? (form.weekdays || []) : undefined,

@@ -57,6 +57,8 @@ export interface ActivityAdminItem {
   price: number
   status: string
   isVisible: boolean
+  /** 首页热门标记 */
+  isHot?: boolean
   /** 重复发布系列ID(同一次每周重复发布展开的多期共享, 单次发布为 NULL) */
   seriesId?: ActivityIdParam
   /** 重复规则JSON, 如 {"repeatType":"weekly","weekdays":[2,4],"totalCount":20} */
@@ -98,6 +100,8 @@ export interface ActivityAdminSave {
   contactWechat?: string
   isVisible?: boolean
   status?: string
+  /** 首页热门标记 */
+  isHot?: boolean
   /** 每周重复发布: true 启用(创建长期延续系列, 期次按需生成, 仅新增有效) */
   repeatEnabled?: boolean
   /** 每周重复的星期(1=周一...7=周日), repeatEnabled=true 时必填, 可多选 */

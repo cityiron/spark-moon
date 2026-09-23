@@ -41,6 +41,13 @@ export function normalizeMember(raw: any): Member {
     totalConsume: raw.totalConsume ?? 0,
     cardStatus: raw.cardStatus ?? (raw.status === 1 ? 'active' : 'frozen'),
     remainingTimes: raw.remainingTimes ?? 0,
+    cards: (raw.cards || []).map((c: any) => ({
+      ...c,
+      cardType: c.cardType ? (cardTypeMap[c.cardType] || c.cardType.toLowerCase()) : undefined,
+      balance: c.balance ?? 0,
+      remainingTimes: c.remainingTimes ?? 0,
+      cardStatus: c.cardStatus ?? 'active',
+    })),
   } as Member
 }
 
@@ -82,13 +89,17 @@ function toSaveRequest(data: Partial<Member>): Record<string, any> {
     times_card: 'TIMES',
     monthly_card: 'MONTHLY',
   }
-  const extra = data as Partial<Member> & { initAmount?: number, initTimes?: number }
+  const extra = data as Partial<Member> & { initAmount?: number, initTimes?: number, giftAmount?: number }
   return {
     phone: data.phone,
     nickname: data.name,
+    gender: data.gender,
     cardType: data.cardType ? (cardTypeMap[data.cardType] || data.cardType.toUpperCase()) : undefined,
     initAmount: extra.initAmount ?? data.balance ?? undefined,
     initTimes: extra.initTimes ?? undefined,
+    giftAmount: extra.giftAmount ?? undefined,
+    planId: data.planId,
+    giftTimes: data.giftTimes,
     status: data.status,
     operatorId: data.operatorId,
   }
@@ -112,10 +123,47 @@ export function updateMember(id: IdParam, data: Partial<Member>) {
   })
 }
 
+/** 追加办卡参数: 只传卡信息(不含手机号等资料) */
+function toAddCardRequest(data: Partial<Member>): Record<string, any> {
+  const cardTypeMap: Record<string, string> = {
+    stored_value: 'STORED_VALUE',
+    times_card: 'TIMES',
+    monthly_card: 'MONTHLY',
+  }
+  const extra = data as Partial<Member> & { initAmount?: number, initTimes?: number, giftAmount?: number }
+  return {
+    cardType: data.cardType ? (cardTypeMap[data.cardType] || data.cardType.toUpperCase()) : undefined,
+    initialAmount: extra.initAmount,
+    initTimes: extra.initTimes,
+    giftAmount: extra.giftAmount,
+    planId: data.planId,
+    giftTimes: data.giftTimes,
+    operatorId: data.operatorId,
+  }
+}
+
+/** 追加办卡: 给已有会员新增一张卡(可跨卡种, 如储值卡会员再购次卡) */
+export function addMemberCard(id: IdParam, data: Partial<Member>) {
+  return request<Member>({
+    url: `/member/${id}/card`,
+    method: 'post',
+    data: toAddCardRequest(data),
+  })
+}
+
 /** 冻结/解冻会员卡: active->1, frozen->0 */
 export function toggleMemberStatus(id: IdParam, status: string) {
   return request<void>({
     url: `/member/${id}/status`,
+    method: 'patch',
+    data: { status: status === 'active' ? 1 : 0 },
+  })
+}
+
+/** 按卡冻结/解冻（仅影响该卡）: active->1, frozen->0 */
+export function toggleCardStatus(cardId: IdParam, status: string) {
+  return request<void>({
+    url: `/member/card/${cardId}/status`,
     method: 'patch',
     data: { status: status === 'active' ? 1 : 0 },
   })
@@ -148,8 +196,8 @@ export function refundMember(data: RefundParams) {
   })
 }
 
-/** 会员卡交易记录 */
-export function getMemberTransactions(memberId: IdParam, params?: PageQuery) {
+/** 会员卡交易记录（cardId 指定时只看该卡流水） */
+export function getMemberTransactions(memberId: IdParam, params?: PageQuery & { cardId?: IdParam }) {
   return request<PageResult<CardTransaction>>({
     url: `/member/${memberId}/transactions`,
     method: 'get',

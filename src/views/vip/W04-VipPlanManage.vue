@@ -36,14 +36,21 @@
                 <div class="plan-name">
                   {{ plan.name }}
                   <a-tag color="blue" style="margin-left: 6px">俱乐部卡</a-tag>
+                  <a-tag v-if="plan.productType === 'TIMES_CARD'" color="gold">次卡</a-tag>
+                  <a-tag v-else-if="plan.productType === 'MONTHLY_CARD'" color="purple">月卡</a-tag>
+                  <a-tag v-else color="green">订阅</a-tag>
                 </div>
                 <a-tag v-if="plan.status === 'active'" color="green">在架</a-tag>
                 <a-tag v-else color="default">下架</a-tag>
               </div>
               <div class="plan-price">
-                ¥ {{ formatFen(plan.price) }}<span class="plan-price-unit">/月</span>
+                ¥ {{ formatFen(plan.price) }}<span v-if="plan.productType === 'SUBSCRIBE'" class="plan-price-unit">/月</span>
               </div>
-              <div class="plan-meta">有效期：{{ plan.durationMonths }} 个月</div>
+              <div class="plan-meta">
+                有效期：{{ plan.durationMonths }} 个月
+                <template v-if="plan.productType === 'TIMES_CARD'"> · 按次使用</template>
+                <template v-else-if="plan.productType === 'MONTHLY_CARD'"> · 买断</template>
+              </div>
               <div class="plan-switch">
                 <span class="switch-label">上架状态</span>
                 <a-switch
@@ -151,6 +158,76 @@
       </a-spin>
     </div>
 
+    <!-- 充值赠送档位配置 -->
+    <div class="page-card">
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <span class="section-title">充值赠送档位</span>
+          <a-alert
+            type="info"
+            show-icon
+            class="tier-tip"
+            message="用户充值满 minAmount 即赠送 giftAmount，到账余额=实付+赠送；赠送金额不参与累计充值等级计算"
+          />
+        </div>
+        <div>
+          <a-button style="margin-right: 8px" @click="loadGifts">刷新</a-button>
+          <a-button type="primary" @click="addGift">新增档位</a-button>
+        </div>
+      </div>
+
+      <a-spin :spinning="giftLoading">
+        <a-table
+          :columns="giftColumns"
+          :data-source="giftList"
+          row-key="rowKey"
+          :pagination="false"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.dataIndex === 'minAmount'">
+              <a-input-number
+                v-model:value="record.minAmount"
+                :min="0.01"
+                :precision="2"
+                :step="100"
+                style="width: 140px"
+              />
+            </template>
+            <template v-else-if="column.dataIndex === 'giftAmount'">
+              <a-input-number
+                v-model:value="record.giftAmount"
+                :min="0.01"
+                :precision="2"
+                :step="50"
+                style="width: 140px"
+              />
+            </template>
+            <template v-else-if="column.dataIndex === 'status'">
+              <a-switch
+                v-model:checked="record.status"
+                :checked-value="1"
+                :un-checked-value="0"
+                checked-children="启用"
+                un-checked-children="停用"
+              />
+            </template>
+            <template v-else-if="column.dataIndex === 'action'">
+              <a-button type="text" danger size="small" @click="removeGift(record)">
+                <delete-outlined />
+              </a-button>
+            </template>
+          </template>
+        </a-table>
+
+        <div class="drawer-footer" style="margin-top: 16px">
+          <a-button type="primary" :loading="giftSaving" @click="submitGifts">
+            保存赠送档位
+          </a-button>
+        </div>
+      </a-spin>
+    </div>
+
     <!-- 已购权益会员表格 -->
     <div class="page-card">
       <div class="table-toolbar">
@@ -190,9 +267,19 @@
               {{ membershipStatusTag(record.status).text }}
             </a-tag>
           </template>
+          <template v-else-if="column.dataIndex === 'action'">
+            <a @click="openRefund(record)">退款</a>
+          </template>
         </template>
       </a-table>
     </div>
+
+    <!-- 会员卡退款 Modal -->
+    <VipRefundModal
+      v-model:open="refundModalOpen"
+      :record="refundRecord"
+      @success="refreshMemberships"
+    />
 
     <!-- 新建/编辑会员卡 Modal -->
     <a-modal
@@ -210,9 +297,12 @@
           <a-tag color="blue">俱乐部会员卡</a-tag>
           <div class="form-tip">俱乐部会员卡由本俱乐部维护；平台会员卡请在「平台会员卡」菜单中配置</div>
         </a-form-item>
+        <a-form-item label="产品类型" name="productType">
+          <a-select v-model:value="planForm.productType" :options="productTypeOptions" />
+        </a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="价格(元)" name="price">
+            <a-form-item :label="planForm.productType === 'SUBSCRIBE' ? '价格(元/月)' : '售价(元)'" name="price">
               <a-input-number
                 v-model:value="planForm.price"
                 :min="0"
@@ -234,7 +324,19 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="上架状态" name="status">
+        <a-alert
+          v-if="planForm.productType === 'TIMES_CARD'"
+          type="info"
+          show-icon
+          message="次卡需在「配置权益」中添加「总次数」权益，作为开卡次数与退款折算依据；售价为整卡买断总价"
+        />
+        <a-alert
+          v-else-if="planForm.productType === 'MONTHLY_CARD'"
+          type="info"
+          show-icon
+          message="月卡为一次性买断，有效期月数即使用时长，到期后失效"
+        />
+        <a-form-item label="上架状态" name="status" style="margin-top: 16px">
           <a-radio-group v-model:value="planForm.status">
             <a-radio value="active">上架</a-radio>
             <a-radio value="inactive">下架</a-radio>
@@ -254,7 +356,7 @@
         <a-alert
           type="info"
           show-icon
-          message="每张会员卡可配置多项权益：场地折扣（按球馆）、培训课程折扣、每月免费场次、活动报名折扣"
+          message="每张会员卡可配置多项权益：场地折扣（按球馆）、培训课程折扣、每月免费场次、活动报名折扣；次卡需配置「总次数」权益作为开卡次数与退款折算依据"
           style="margin-bottom: 16px"
         />
         <div class="benefit-list">
@@ -309,6 +411,16 @@
                   style="width: 200px"
                 />
                 <span class="field-hint">每月免费场次</span>
+              </template>
+              <template v-else-if="b.benefitType === 'TOTAL_TIMES'">
+                <a-input-number
+                  v-model:value="b.freeSlots"
+                  :min="1"
+                  :step="10"
+                  placeholder="整卡总次数"
+                  style="width: 200px"
+                />
+                <span class="field-hint">整卡总次数（开卡次数与退款折算依据）</span>
               </template>
               <template v-else>
                 <a-input-number
@@ -371,6 +483,8 @@ import {
   saveVipPlanBenefits,
   getRechargeTiers,
   saveRechargeTiers,
+  getRechargeGifts,
+  saveRechargeGifts,
   getVipMemberships,
   getAllVenues,
   type VipMembershipQuery,
@@ -381,8 +495,10 @@ import type {
   VipPlanStatus,
   VipBenefit,
   RechargeTier,
+  RechargeGift,
   Venue,
 } from '@/types/models'
+import VipRefundModal from '@/components/VipRefundModal.vue'
 
 // ===== 工具 =====
 /** 分转元, 保留两位小数 */
@@ -410,16 +526,18 @@ const membershipColumns: TableColumnsType = [
   { title: '购买时间', dataIndex: 'purchaseTime', width: 170 },
   { title: '到期时间', dataIndex: 'expireTime', width: 170 },
   { title: '状态', dataIndex: 'status', width: 100 },
+  { title: '操作', dataIndex: 'action', width: 80 },
 ]
 
 const membershipStatusOptions = [
   { label: '有效', value: 'active' },
   { label: '已过期', value: 'expired' },
+  { label: '已退款', value: 'refunded' },
 ]
-function membershipStatusTag(s: 'active' | 'expired'): { color: string, text: string } {
-  return s === 'active'
-    ? { color: 'green', text: '有效' }
-    : { color: 'default', text: '已过期' }
+function membershipStatusTag(s: 'active' | 'expired' | 'refunded'): { color: string, text: string } {
+  if (s === 'active') return { color: 'green', text: '有效' }
+  if (s === 'refunded') return { color: 'red', text: '已退款' }
+  return { color: 'default', text: '已过期' }
 }
 
 const {
@@ -448,6 +566,14 @@ function handleMembershipReset() {
   filterPlanId.value = undefined
   filterStatus.value = undefined
   resetMembershipQuery()
+}
+
+// ===== 会员卡退款 =====
+const refundModalOpen = ref(false)
+const refundRecord = ref<VipMembership | null>(null)
+function openRefund(record: VipMembership) {
+  refundRecord.value = record
+  refundModalOpen.value = true
 }
 
 // ===== 俱乐部会员卡列表 =====
@@ -494,22 +620,30 @@ const planForm = reactive<{
   name: string
   price: number       // 元
   durationMonths: number
+  productType: 'SUBSCRIBE' | 'TIMES_CARD' | 'MONTHLY_CARD'
   status: VipPlanStatus
 }>({
   name: '',
   price: 0,
   durationMonths: 1,
+  productType: 'SUBSCRIBE',
   status: 'active',
 })
+const productTypeOptions = [
+  { label: '订阅卡（按月付费，长期有效）', value: 'SUBSCRIBE' },
+  { label: '次卡（按次使用，售完即止）', value: 'TIMES_CARD' },
+  { label: '月卡（一次性买断）', value: 'MONTHLY_CARD' },
+]
 const planRules = {
   name: [{ required: true, message: '请输入会员卡名称', trigger: 'blur' }],
   price: [{ required: true, message: '请输入会员卡价格', trigger: 'blur', type: 'number' }],
   durationMonths: [{ required: true, message: '请输入有效期(月)', trigger: 'blur', type: 'number' }],
+  productType: [{ required: true, message: '请选择产品类型', trigger: 'change' }],
 }
 
 function openCreatePlan() {
   isEdit.value = false
-  Object.assign(planForm, { name: '', price: 0, durationMonths: 1, status: 'active' })
+  Object.assign(planForm, { name: '', price: 0, durationMonths: 1, productType: 'SUBSCRIBE', status: 'active' })
   formModalOpen.value = true
 }
 function openEditPlan(plan: VipPlan) {
@@ -519,6 +653,7 @@ function openEditPlan(plan: VipPlan) {
     name: plan.name,
     price: plan.price / 100,    // 分转元
     durationMonths: plan.durationMonths,
+    productType: plan.productType ?? 'SUBSCRIBE',
     status: plan.status,
   })
   formModalOpen.value = true
@@ -530,6 +665,7 @@ async function submitPlan() {
     const payload = {
       name: planForm.name,
       planType: 'venue' as const,
+      productType: planForm.productType,
       price: Math.round(planForm.price * 100),   // 元转分
       durationMonths: planForm.durationMonths,
       status: planForm.status,
@@ -571,6 +707,7 @@ const benefitTypeOptions = [
   { label: '培训课程折扣', value: 'TRAINING_DISCOUNT' },
   { label: '每月免费场次', value: 'FREE_SLOT' },
   { label: '活动报名折扣', value: 'ACTIVITY_DISCOUNT' },
+  { label: '总次数（次卡）', value: 'TOTAL_TIMES' },
 ]
 
 const benefitDrawerOpen = ref(false)
@@ -591,8 +728,8 @@ function emptyBenefit(type: string): VipBenefit {
     benefitType: type as VipBenefit['benefitType'],
     // 场地折扣默认“全部球馆”(前端用 0 表示, 提交时转 null)
     venueId: type === 'VENUE_DISCOUNT' ? 0 : null,
-    discountRate: 0.9,
-    freeSlots: 1,
+    discountRate: type === 'FREE_SLOT' || type === 'TOTAL_TIMES' ? null : 0.9,
+    freeSlots: type === 'FREE_SLOT' || type === 'TOTAL_TIMES' ? 30 : null,
     remark: '',
   }
 }
@@ -604,10 +741,10 @@ function onBenefitTypeChange(b: VipBenefit) {
   } else if (b.venueId == null) {
     b.venueId = 0
   }
-  if (b.benefitType !== 'FREE_SLOT') {
+  if (b.benefitType !== 'FREE_SLOT' && b.benefitType !== 'TOTAL_TIMES') {
     b.freeSlots = null
   }
-  if (b.benefitType === 'FREE_SLOT') {
+  if (b.benefitType === 'FREE_SLOT' || b.benefitType === 'TOTAL_TIMES') {
     b.discountRate = null
   } else if (b.discountRate == null) {
     b.discountRate = 0.9
@@ -662,6 +799,10 @@ async function submitBenefits() {
       message.warning('每月免费场次需大于 0')
       return
     }
+    if (b.benefitType === 'TOTAL_TIMES' && (b.freeSlots == null || b.freeSlots <= 0)) {
+      message.warning('次卡总次数需大于 0')
+      return
+    }
     if (
       (b.benefitType === 'TRAINING_DISCOUNT' || b.benefitType === 'ACTIVITY_DISCOUNT')
       && b.discountRate == null
@@ -669,6 +810,11 @@ async function submitBenefits() {
       message.warning('折扣类权益需填写折扣率')
       return
     }
+  }
+  // 次卡产品必须配置总次数权益（开卡次数与退款折算依据）
+  if (currentPlan.value?.productType === 'TIMES_CARD' && !benefitForm.value.some((b) => b.benefitType === 'TOTAL_TIMES')) {
+    message.warning('次卡必须配置「总次数」权益')
+    return
   }
   benefitSaving.value = true
   try {
@@ -678,7 +824,7 @@ async function submitBenefits() {
       // 场地折扣: 0 表示全部球馆(统一折扣) → 保存为 null
       venueId: b.benefitType === 'VENUE_DISCOUNT' ? (b.venueId === 0 ? null : b.venueId) : null,
       discountRate: b.discountRate ?? null,
-      freeSlots: b.benefitType === 'FREE_SLOT' ? b.freeSlots : null,
+      freeSlots: b.benefitType === 'FREE_SLOT' || b.benefitType === 'TOTAL_TIMES' ? b.freeSlots : null,
       remark: b.remark,
     }))
     await saveVipPlanBenefits(planId, payload)
@@ -774,11 +920,87 @@ async function submitTiers() {
   }
 }
 
+// ===== 充值赠送档位 =====
+type GiftRow = RechargeGift & { rowKey: number }
+
+const giftColumns: TableColumnsType = [
+  { title: '充值满(元)', dataIndex: 'minAmount', width: 200 },
+  { title: '赠送金额(元)', dataIndex: 'giftAmount', width: 200 },
+  { title: '状态', dataIndex: 'status', width: 120 },
+  { title: '操作', dataIndex: 'action', width: 60 },
+]
+
+const giftLoading = ref(false)
+const giftSaving = ref(false)
+const giftList = ref<GiftRow[]>([])
+
+function normalizeGift(g: RechargeGift): GiftRow {
+  return {
+    ...g,
+    rowKey: nextTierKey(),
+    minAmount: Number(g.minAmount ?? 0),
+    giftAmount: Number(g.giftAmount ?? 0),
+    status: g.status === 0 ? 0 : 1,
+  }
+}
+
+async function loadGifts() {
+  giftLoading.value = true
+  try {
+    const list = await getRechargeGifts()
+    giftList.value = (list || []).map(normalizeGift)
+  } catch {
+    giftList.value = []
+  } finally {
+    giftLoading.value = false
+  }
+}
+
+function addGift() {
+  giftList.value.push(normalizeGift({
+    minAmount: 500,
+    giftAmount: 50,
+    status: 1,
+  }))
+}
+
+function removeGift(record: GiftRow) {
+  const idx = giftList.value.findIndex((g) => g.rowKey === record.rowKey)
+  if (idx >= 0) giftList.value.splice(idx, 1)
+}
+
+async function submitGifts() {
+  for (const g of giftList.value) {
+    if (!g.minAmount || g.minAmount <= 0) {
+      message.warning('充值金额必须大于 0')
+      return
+    }
+    if (!g.giftAmount || g.giftAmount <= 0) {
+      message.warning('赠送金额必须大于 0')
+      return
+    }
+  }
+  giftSaving.value = true
+  try {
+    const payload = giftList.value.map((g) => ({
+      minAmount: g.minAmount,
+      giftAmount: g.giftAmount,
+      status: g.status,
+    }))
+    await saveRechargeGifts(payload)
+    message.success('充值赠送档位已保存')
+    loadGifts()
+  } finally {
+    giftSaving.value = false
+  }
+}
+
 // ===== 初始化加载 =====
 onMounted(() => {
   loadPlanList()
   loadMembershipList()
   loadTiers()
+  loadGifts()
 })
 </script>
 

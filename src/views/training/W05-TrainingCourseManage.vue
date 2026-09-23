@@ -73,6 +73,7 @@
                 <a-space>
                   <a-tag :color="courseTypeColor(record.courseType)">{{ courseTypeLabel(record.courseType) }}</a-tag>
                   <span>{{ record.name }}</span>
+                  <a-tag v-if="record.isHot" color="red">热门</a-tag>
                 </a-space>
               </template>
               <template v-else-if="column.dataIndex === 'coachName'">
@@ -274,7 +275,7 @@
           </a-col>
         </a-row>
         <a-row :gutter="16">
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item label="课程类型" name="courseType">
               <a-radio-group v-model:value="courseForm.courseType">
                 <a-radio value="class">班课</a-radio>
@@ -282,12 +283,17 @@
               </a-radio-group>
             </a-form-item>
           </a-col>
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item label="状态" name="status">
               <a-radio-group v-model:value="courseForm.status">
                 <a-radio value="active">上架</a-radio>
                 <a-radio value="inactive">下架</a-radio>
               </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="首页热门" name="isHot" extra="热门课程优先展示在首页">
+              <a-switch v-model:checked="courseForm.isHot" checked-children="热门" un-checked-children="普通" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -597,6 +603,7 @@ const courseForm = reactive<{
   courseType: CourseType
   description: string
   status: CourseStatus
+  isHot: boolean
 }>({
   name: '',
   coachId: undefined,
@@ -611,6 +618,7 @@ const courseForm = reactive<{
   courseType: 'class',
   description: '',
   status: 'active',
+  isHot: false,
 })
 const courseRules = {
   name: [{ required: true, message: '请输入课程名', trigger: 'blur' }],
@@ -636,6 +644,7 @@ function openCreateCourse() {
     courseType: 'class',
     description: '',
     status: 'active',
+    isHot: false,
   })
   courseModalOpen.value = true
   // 刷新教练下拉, 确保选项最新
@@ -660,6 +669,7 @@ function openEditCourse(record: TrainingCourse) {
     courseType: record.courseType,
     description: record.description,
     status: record.status,
+    isHot: record.isHot,
   })
   courseModalOpen.value = true
   loadCoachList()
@@ -691,6 +701,7 @@ async function submitCourse() {
       outline: courseForm.outline || undefined,
       description: courseForm.description,
       status: courseForm.status,
+      isHot: courseForm.isHot,
     }
     // 元转分; 按课程类型提交对应价格配置
     const payload = isPrivate

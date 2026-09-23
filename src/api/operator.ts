@@ -41,6 +41,26 @@ export function submitApplication(data: {
   })
 }
 
+/** 管理员直接创建经营者 (免申请, 直接通过并开通默认账号) */
+export function createOperator(data: {
+  companyName: string
+  licenseNo: string
+  licenseImage?: string
+  contactName: string
+  contactPhone: string
+  venueName: string
+  venueAddress: string
+  venueCourtCount: number
+  venueOpenTime: string
+  venueCloseTime: string
+}) {
+  return request({
+    url: '/operator/create',
+    method: 'POST',
+    data,
+  })
+}
+
 /** 入驻申请列表 (分页) */
 export function getOperatorList(params: OperatorQuery) {
   return request<PageResult<OperatorApplication>>({

@@ -15,6 +15,7 @@
         >
           <template #prefix><environment-outlined /></template>
         </a-select>
+        <a-button type="primary" :icon="h(PlusOutlined)" @click="openVenueCreate">新增球馆</a-button>
       </div>
       <a-tooltip title="场地锁定功能请在小程序管理端操作">
         <a-button @click="goMpLock">
@@ -120,7 +121,7 @@
 
               <div class="form-actions">
                 <a-button @click="resetVenueForm">取消</a-button>
-                <a-button type="primary" :loading="saving" @click="saveVenueInfo">保存基本信息</a-button>
+                <a-button type="primary" :loading="saving" :disabled="!currentVenueId" @click="saveVenueInfo">保存基本信息</a-button>
               </div>
             </a-form>
           </div>
@@ -306,13 +307,60 @@
               </a-form-item>
               <div class="form-actions">
                 <a-button @click="resetIntroForm">取消</a-button>
-                <a-button type="primary" :loading="saving" @click="saveIntro">保存介绍</a-button>
+                <a-button type="primary" :loading="saving" :disabled="!currentVenueId" @click="saveIntro">保存介绍</a-button>
               </div>
             </a-form>
           </div>
         </a-tab-pane>
       </a-tabs>
     </a-spin>
+
+    <!-- 新增球馆 Modal -->
+    <a-modal
+      v-model:open="venueCreateVisible"
+      title="新增球馆"
+      :confirm-loading="venueCreateSaving"
+      ok-text="创建球馆"
+      cancel-text="取消"
+      @ok="submitVenueCreate"
+    >
+      <a-form ref="venueCreateFormRef" :model="venueCreateForm" :rules="venueCreateRules" :label-col="{ span: 6 }">
+        <a-form-item v-if="isSuperAdmin" label="所属经营者" name="operatorId">
+          <a-select
+            v-model:value="venueCreateForm.operatorId"
+            placeholder="选择该球馆归属的俱乐部"
+            :options="operatorOptions"
+          />
+        </a-form-item>
+        <a-form-item label="球馆名称" name="name">
+          <a-input v-model:value="venueCreateForm.name" placeholder="请输入球馆名称" />
+        </a-form-item>
+        <a-form-item label="联系电话" name="phone">
+          <a-input v-model:value="venueCreateForm.phone" placeholder="请输入联系电话" />
+        </a-form-item>
+        <a-form-item label="球馆地址" name="address">
+          <a-input v-model:value="venueCreateForm.address" placeholder="请输入球馆地址" />
+        </a-form-item>
+        <a-form-item label="详细地址" name="detailAddress">
+          <a-input v-model:value="venueCreateForm.detailAddress" placeholder="门牌号、楼层等" />
+        </a-form-item>
+        <a-form-item label="营业时间" name="openTime">
+          <a-space>
+            <a-time-picker v-model:value="venueCreateForm.openTime" value-format="HH:mm" format="HH:mm" placeholder="08:00" />
+            <a-time-picker v-model:value="venueCreateForm.closeTime" value-format="HH:mm" format="HH:mm" placeholder="22:00" />
+          </a-space>
+        </a-form-item>
+        <a-form-item label="接受平台卡" name="acceptPlatformCard">
+          <a-switch
+            v-model:checked="venueCreateForm.acceptPlatformCard"
+            :checked-value="1"
+            :un-checked-value="0"
+            checked-children="接受"
+            un-checked-children="不接受"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 场地新增/编辑 Drawer -->
     <a-drawer
@@ -520,13 +568,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, h } from 'vue'
 import { message, type FormInstance, type TableColumnsType, type UploadFile } from 'ant-design-vue'
 import { PlusOutlined, LockOutlined, EnvironmentOutlined } from '@ant-design/icons-vue'
 import {
   getAllVenues,
   getVenueDetail,
   updateVenue,
+  createVenue,
   getVenueCourts,
   createCourt,
   updateCourt,
@@ -535,6 +584,8 @@ import {
   saveVenuePriceGroups,
   uploadImage,
 } from '@/api/venue'
+import { getOperatorList } from '@/api/operator'
+import { useAuthStore } from '@/stores/auth'
 import type {
   Venue,
   Court,
@@ -623,6 +674,8 @@ const venueOptions = ref<{ label: string, value: string }[]>([])
 const venueLoading = ref(false)
 const currentVenueId = ref<string>('')
 const detailLoading = ref(false)
+const authStore = useAuthStore()
+const isSuperAdmin = computed(() => authStore.roles.includes('super_admin'))
 
 async function loadVenueOptions() {
   venueLoading.value = true
@@ -643,6 +696,88 @@ async function loadVenueOptions() {
 
 function onVenueChange() {
   loadVenueDetail()
+}
+
+// ===== 新增球馆 =====
+const venueCreateVisible = ref(false)
+const venueCreateSaving = ref(false)
+const venueCreateFormRef = ref<FormInstance>()
+const venueCreateForm = reactive({
+  name: '',
+  phone: '',
+  address: '',
+  detailAddress: '',
+  openTime: '08:00',
+  closeTime: '22:00',
+  acceptPlatformCard: 0,
+  operatorId: undefined as string | undefined,
+})
+const venueCreateRules = {
+  name: [{ required: true, message: '请输入球馆名称' }],
+}
+const operatorOptions = ref<{ label: string, value: string }[]>([])
+
+async function openVenueCreate() {
+  Object.assign(venueCreateForm, {
+    name: '',
+    phone: '',
+    address: '',
+    detailAddress: '',
+    openTime: '08:00',
+    closeTime: '22:00',
+    acceptPlatformCard: 0,
+    operatorId: undefined,
+  })
+  venueCreateVisible.value = true
+  // 超管需指定归属俱乐部
+  if (isSuperAdmin.value) {
+    try {
+      const res = await getOperatorList({ page: 1, size: 100 })
+      operatorOptions.value = (res.list || []).map((o) => ({
+        label: o.companyName || String(o.id),
+        value: String(o.id),
+      }))
+    } catch {
+      operatorOptions.value = []
+    }
+  }
+}
+
+async function submitVenueCreate() {
+  if (isSuperAdmin.value && !venueCreateForm.operatorId) {
+    message.warning('请选择该球馆归属的俱乐部')
+    return
+  }
+  try {
+    await venueCreateFormRef.value?.validate()
+  } catch {
+    return
+  }
+  venueCreateSaving.value = true
+  try {
+    const created = await createVenue({
+      name: venueCreateForm.name.trim(),
+      phone: venueCreateForm.phone.trim(),
+      address: venueCreateForm.address.trim(),
+      detailAddress: venueCreateForm.detailAddress.trim(),
+      openTime: venueCreateForm.openTime || '08:00',
+      closeTime: venueCreateForm.closeTime || '22:00',
+      acceptPlatformCard: venueCreateForm.acceptPlatformCard,
+      operatorId: isSuperAdmin.value ? venueCreateForm.operatorId : undefined,
+    })
+    message.success('球馆创建成功，请到"场地配置"添加场地')
+    venueCreateVisible.value = false
+    // 刷新球馆下拉并选中新球馆
+    await loadVenueOptions()
+    if (created?.id != null) {
+      currentVenueId.value = String(created.id)
+      await loadVenueDetail()
+    }
+  } catch {
+    // 错误已由拦截器提示
+  } finally {
+    venueCreateSaving.value = false
+  }
 }
 
 // ===== 球馆详情（信息 + 介绍 共用 venueForm） =====
@@ -734,6 +869,10 @@ function resetIntroForm() {
 const saving = ref(false)
 
 async function saveVenueInfo() {
+  if (!currentVenueId.value) {
+    message.warning('请先选择球馆')
+    return
+  }
   await venueFormRef.value?.validate()
   saving.value = true
   try {
@@ -756,6 +895,10 @@ async function saveVenueInfo() {
 }
 
 async function saveIntro() {
+  if (!currentVenueId.value) {
+    message.warning('请先选择球馆')
+    return
+  }
   saving.value = true
   try {
     await updateVenue(currentVenueId.value, {

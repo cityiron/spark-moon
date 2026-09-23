@@ -182,11 +182,21 @@
                   {{ membershipStatusTag(record.status).text }}
                 </a-tag>
               </template>
+              <template v-else-if="column.dataIndex === 'action'">
+                <a @click="openRefund(record)">退款</a>
+              </template>
             </template>
           </a-table>
         </a-tab-pane>
       </a-tabs>
     </div>
+
+    <!-- 会员卡退款 Modal -->
+    <VipRefundModal
+      v-model:open="refundModalOpen"
+      :record="refundRecord"
+      @success="refreshMemberships"
+    />
 
     <!-- 新建/编辑平台卡 Modal -->
     <a-modal
@@ -254,6 +264,7 @@ import {
 } from '@/api/vip'
 import { updateVenue } from '@/api/venue'
 import type { VipPlan, VipMembership, VipPlanStatus, VipBenefit, Venue } from '@/types/models'
+import VipRefundModal from '@/components/VipRefundModal.vue'
 
 /** 分转元, 保留两位小数 */
 function formatFen(fen: number | undefined): string {
@@ -485,15 +496,17 @@ const membershipColumns: TableColumnsType = [
   { title: '购买时间', dataIndex: 'purchaseTime', width: 170 },
   { title: '到期时间', dataIndex: 'expireTime', width: 170 },
   { title: '状态', dataIndex: 'status', width: 100 },
+  { title: '操作', dataIndex: 'action', width: 80 },
 ]
 const membershipStatusOptions = [
   { label: '有效', value: 'active' },
   { label: '已过期', value: 'expired' },
+  { label: '已退款', value: 'refunded' },
 ]
-function membershipStatusTag(s: 'active' | 'expired'): { color: string, text: string } {
-  return s === 'active'
-    ? { color: 'green', text: '有效' }
-    : { color: 'default', text: '已过期' }
+function membershipStatusTag(s: 'active' | 'expired' | 'refunded'): { color: string, text: string } {
+  if (s === 'active') return { color: 'green', text: '有效' }
+  if (s === 'refunded') return { color: 'red', text: '已退款' }
+  return { color: 'default', text: '已过期' }
 }
 
 const {
@@ -521,6 +534,14 @@ function handleMembershipReset() {
   filterPlanId.value = undefined
   filterStatus.value = undefined
   resetMembershipQuery()
+}
+
+// ===== 会员卡退款 =====
+const refundModalOpen = ref(false)
+const refundRecord = ref<VipMembership | null>(null)
+function openRefund(record: VipMembership) {
+  refundRecord.value = record
+  refundModalOpen.value = true
 }
 
 onMounted(() => {

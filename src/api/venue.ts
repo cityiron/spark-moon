@@ -38,7 +38,7 @@ export function getVenueDetail(id: IdParam) {
   })
 }
 
-export function createVenue(data: Partial<Venue>) {
+export function createVenue(data: Partial<Venue> & { operatorId?: string | number }) {
   return request<Venue>({
     url: '/venue',
     method: 'post',

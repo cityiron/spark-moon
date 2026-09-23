@@ -99,6 +99,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/finance/W13-FinanceManage.vue'),
         meta: { title: '财务管理', icon: 'WalletOutlined' },
       },
+      {
+        path: 'enterprise',
+        name: 'EnterpriseManage',
+        component: () => import('@/views/enterprise/W16-EnterpriseManage.vue'),
+        meta: { title: '企业客户', icon: 'BankOutlined' },
+      },
+      {
+        path: 'invoice',
+        name: 'InvoiceManage',
+        component: () => import('@/views/invoice/W17-InvoiceManage.vue'),
+        meta: { title: '开票管理', icon: 'FileTextOutlined' },
+      },
     ],
   },
   {
@@ -136,6 +148,8 @@ export const ROLE_MENUS: Record<string, string[]> = {
   '/activity': ['super_admin', 'admin', 'operator'], // 活动管理
   '/club': ['super_admin'], // 俱乐部管理（官方认证仅平台超管）
   '/finance': ['super_admin', 'admin'], // 财务管理
+  '/enterprise': ['super_admin', 'admin', 'operator'], // 企业客户(后台代企业锁场)
+  '/invoice': ['super_admin', 'admin', 'operator'], // 开票管理(充值开票确认)
 }
 
 /** 返回该角色第一个可访问的菜单路径, 无则默认球馆管理 */

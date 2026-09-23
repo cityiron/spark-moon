@@ -128,6 +128,8 @@ import {
   TrophyOutlined,
   SwapOutlined,
   DownOutlined,
+  BankOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons-vue'
 import type { ItemType } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -244,6 +246,16 @@ const menuItems = computed<ItemType[]>(() => {
       key: '/finance',
       icon: () => h(WalletOutlined),
       label: '财务管理',
+    },
+    {
+      key: '/enterprise',
+      icon: () => h(BankOutlined),
+      label: '企业客户',
+    },
+    {
+      key: '/invoice',
+      icon: () => h(FileTextOutlined),
+      label: '开票管理',
     },
   ]
   return all.filter((item) => {

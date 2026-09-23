@@ -276,6 +276,34 @@ export type CardType = 'stored_value' | 'times_card' | 'monthly_card'
 /** 会员卡状态 */
 export type CardStatus = 'active' | 'frozen' | 'expired' | 'disabled'
 
+/** 会员名下的一张卡（多卡并存） */
+export interface MemberCard {
+  /** 卡 id（雪花大整数，后端序列化为字符串） */
+  id: string | number
+  /** 卡号（与 id 同值） */
+  cardNo: string
+  /** 卡类型 */
+  cardType: CardType
+  /** 来源会员卡产品 id（次卡/月卡产品化后非空） */
+  planId?: string | number
+  /** 购买售价(元) */
+  price?: number
+  /** 储值卡余额(分) */
+  balance: number
+  /** 次卡剩余次数 */
+  remainingTimes?: number
+  /** 卡状态 */
+  cardStatus: CardStatus
+  /** 办卡日期 */
+  joinDate: string
+  /** 到期日期（次卡/月卡） */
+  expireDate?: string
+  /** 卡片归属俱乐部 id */
+  operatorId?: string | number
+  /** 归属俱乐部名称 */
+  operatorName?: string
+}
+
 /** 会员 */
 export interface Member {
   /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
@@ -307,6 +335,18 @@ export interface Member {
   expireDate?: string
   remark?: string
   createdAt?: string
+  /** 办卡初始充值金额(元), 提交用字段 */
+  initAmount?: number
+  /** 办卡初始次数(次卡), 提交用字段 */
+  initTimes?: number
+  /** 办卡赠送金额(元, 仅储值卡), 提交用字段; 与实付分开记账 */
+  giftAmount?: number
+  /** 选择的产品 id(次卡/月卡必填), 提交用字段 */
+  planId?: string | number
+  /** 赠送次数(次卡, 活动/协商多赠, 仅作说明不参与退款), 提交用字段 */
+  giftTimes?: number
+  /** 该会员全部卡片（多卡并存；列表行主卡见顶层 cardType/balance 字段） */
+  cards?: MemberCard[]
 }
 
 /** 充值/交易类型 */
@@ -341,10 +381,14 @@ export interface CardTransaction {
 /** 充值参数 */
 export interface RechargeParams {
   memberId: string | number
-  /** 充值金额(分) */
+  /** 目标卡 id；为空时作用于主卡 */
+  cardId?: string | number
+  /** 充值金额(分)，储值卡必填 */
   amount: number
   /** 赠送金额(分) */
   giftAmount?: number
+  /** 充值次数（次卡必填，剩余次数真实增加） */
+  times?: number
   payMethod: 'wechat' | 'alipay' | 'cash' | 'card'
   remark?: string
 }
@@ -352,8 +396,12 @@ export interface RechargeParams {
 /** 余额调整参数 */
 export interface BalanceAdjustParams {
   memberId: string | number
-  /** 调整金额(分), 正数为增加, 负数为扣减 */
+  /** 目标卡 id；为空时作用于主卡 */
+  cardId?: string | number
+  /** 调整金额(分), 正数为增加, 负数为扣减（储值卡） */
   amount: number
+  /** 调整次数（次卡，可正可负） */
+  times?: number
   /** 调整原因 */
   reason: string
   remark?: string
@@ -362,6 +410,8 @@ export interface BalanceAdjustParams {
 /** 退款参数 */
 export interface RefundParams {
   memberId: string | number
+  /** 目标卡 id；为空时作用于主卡 */
+  cardId?: string | number
   /** 退款金额(分) */
   amount: number
   /** 退款方式: balance 退到会员卡余额, wechat 原路退回微信 */
@@ -441,6 +491,10 @@ export interface VipPlan {
   durationMonths: number
   /** 卡类型: platform 平台卡 / venue 球馆卡 */
   planType?: 'platform' | 'venue'
+  /** 产品类型: SUBSCRIBE 订阅 / TIMES_CARD 次卡 / MONTHLY_CARD 月卡(买断) */
+  productType?: 'SUBSCRIBE' | 'TIMES_CARD' | 'MONTHLY_CARD'
+  /** 时长(天) */
+  durationDays?: number
   status: VipPlanStatus
   /** 卡种描述 */
   description?: string
@@ -465,20 +519,21 @@ export type BenefitType =
   | 'TRAINING_DISCOUNT'
   | 'FREE_SLOT'
   | 'ACTIVITY_DISCOUNT'
+  | 'TOTAL_TIMES'
 
 /** 卡种权益 (membership_vip_benefit) */
 export interface VipBenefit {
   /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
   id?: string | number
   planId: string | number
-  /** 权益类型: VENUE_DISCOUNT / TRAINING_DISCOUNT / FREE_SLOT / ACTIVITY_DISCOUNT */
+  /** 权益类型: VENUE_DISCOUNT / TRAINING_DISCOUNT / FREE_SLOT / ACTIVITY_DISCOUNT / TOTAL_TIMES */
   benefitType: BenefitType
   /** 场地折扣按球馆配置时为球馆 ID, 其余为 null */
   venueId?: string | number | null
   venueName?: string
   /** 折扣率 0.8=8折 (折扣类权益) */
   discountRate?: number | null
-  /** 每月免费场次数 (仅 FREE_SLOT) */
+  /** 每月免费场次数(FREE_SLOT) / 总次数(TOTAL_TIMES) */
   freeSlots?: number | null
   remark?: string
 }
@@ -498,6 +553,62 @@ export interface RechargeTier {
   status: 1 | 0
 }
 
+/** 充值赠送档位: 充值满 minAmount 送 giftAmount */
+export interface RechargeGift {
+  id?: string | number
+  operatorId?: string | number
+  /** 充值满(元) */
+  minAmount: number
+  /** 赠送金额(元) */
+  giftAmount: number
+  /** 1 启用 0 停用 */
+  status: 1 | 0
+}
+
+/** 企业客户档案 */
+export interface EnterpriseItem {
+  id: string | number
+  operatorId?: string | number
+  operatorName?: string
+  /** 企业名称 */
+  name: string
+  /** 对接人姓名 */
+  contactName?: string
+  /** 对接手机号 */
+  contactPhone?: string
+  /** 定场专属折扣率 0.9=9折, 空=无折扣 */
+  discountRate?: number
+  remark?: string
+  /** 1 启用 0 停用 */
+  status: 1 | 0
+  createdAt?: string
+}
+
+/** 开票申请 */
+export interface InvoiceApplyItem {
+  id: string | number
+  userId?: string | number
+  userName?: string
+  userPhone?: string
+  cardId?: string | number
+  transactionId?: string | number
+  operatorId?: string | number
+  operatorName?: string
+  /** 开票金额(元) */
+  amount: number
+  /** PERSONAL 个人抬头 / COMPANY 企业抬头 */
+  invoiceType: 'PERSONAL' | 'COMPANY'
+  title: string
+  taxNo?: string
+  /** PENDING 待处理 / CONFIRMED 已开票 / REJECTED 已驳回 */
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED'
+  remark?: string
+  invoiceNo?: string
+  rejectReason?: string
+  confirmedAt?: string
+  createdAt?: string
+}
+
 /** 已购 VIP 权益会员记录 */
 export interface VipMembership {
   /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
@@ -509,7 +620,29 @@ export interface VipMembership {
   vipPlanName: string
   purchaseTime: string
   expireTime: string
-  status: 'active' | 'expired'
+  status: 'active' | 'expired' | 'refunded'
+}
+
+/** 会员卡退款计算明细(管理端退款弹窗展示, 金额均为分) */
+export interface VipRefundCalc {
+  subscriptionId: string | number
+  userName: string
+  userPhone: string
+  planName: string
+  /** 卡费(分) */
+  cardFee: number
+  /** 已用天数 */
+  elapsedDays: number
+  /** 时间折算扣款(分) */
+  timeDeduct: number
+  /** 权益折算扣款(分), ADMIN 恒为 0 */
+  benefitDeduct: number
+  /** 应退金额(分) */
+  refundAmount: number
+  /** USER 用户主动 / ADMIN 管理员不可抗力 */
+  refundType: 'USER' | 'ADMIN'
+  /** active 生效中 / expired 已过期 / refunded 已退款 */
+  subscriptionStatus: 'active' | 'expired' | 'refunded'
 }
 
 // ==================== 培训课程 ====================
@@ -563,6 +696,8 @@ export interface TrainingCourse {
   description: string
   courseType: CourseType
   status: CourseStatus
+  /** 首页热门标记 */
+  isHot?: boolean
   /** 已报名学员数 */
   studentCount?: number
   /** 已消课时 */

@@ -42,6 +42,7 @@
                 @change="reloadApplications"
               />
               <a-button @click="resetAppQuery">重置</a-button>
+              <a-button type="primary" :icon="h(PlusOutlined)" @click="openCreateModal">新建俱乐部</a-button>
             </div>
           </div>
 
@@ -309,6 +310,52 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- ==================== 新建俱乐部 (管理员直接配置, 免申请) ==================== -->
+    <a-modal
+      v-model:open="createVisible"
+      title="新建俱乐部"
+      :confirm-loading="createSaving"
+      ok-text="创建并开通"
+      cancel-text="取消"
+      @ok="confirmCreate"
+    >
+      <a-alert
+        style="margin-bottom: 16px"
+        type="info"
+        show-icon
+        message="创建后直接通过入驻，并自动开通经营者登录账号（登录账号=联系人手机号，初始密码 123456）"
+      />
+      <a-form ref="createFormRef" :model="createForm" :rules="createRules" :label-col="{ span: 6 }">
+        <a-form-item label="公司名称" name="companyName">
+          <a-input v-model:value="createForm.companyName" placeholder="营业执照上的公司名称" />
+        </a-form-item>
+        <a-form-item label="营业执照号" name="licenseNo">
+          <a-input v-model:value="createForm.licenseNo" placeholder="营业执照编号" />
+        </a-form-item>
+        <a-form-item label="联系人" name="contactName">
+          <a-input v-model:value="createForm.contactName" placeholder="联系人姓名" />
+        </a-form-item>
+        <a-form-item label="手机号" name="contactPhone">
+          <a-input v-model:value="createForm.contactPhone" placeholder="经营者登录账号, 初始密码123456" />
+        </a-form-item>
+        <a-form-item label="场馆名称" name="venueName">
+          <a-input v-model:value="createForm.venueName" placeholder="场馆名称" />
+        </a-form-item>
+        <a-form-item label="场馆地址" name="venueAddress">
+          <a-input v-model:value="createForm.venueAddress" placeholder="场馆地址" />
+        </a-form-item>
+        <a-form-item label="场地数量" name="venueCourtCount">
+          <a-input-number v-model:value="createForm.venueCourtCount" :min="1" :max="99" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="营业时间" name="venueOpenTime">
+          <a-space>
+            <a-time-picker v-model:value="createForm.venueOpenTime" value-format="HH:mm" placeholder="开业时间" style="width: 140px" />
+            <a-time-picker v-model:value="createForm.venueCloseTime" value-format="HH:mm" placeholder="打烊时间" style="width: 140px" />
+          </a-space>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -326,6 +373,7 @@ import {
   rejectOperator,
   configMch,
   verifyMch,
+  createOperator,
   getAccountList,
   createAccount,
   updateAccount,
@@ -393,6 +441,79 @@ function reloadApplications() {
 
 function resetAppQuery() {
   resetApplications()
+}
+
+// ==================== 新建俱乐部 (管理员直接配置, 免申请) ====================
+const createVisible = ref(false)
+const createSaving = ref(false)
+const createFormRef = ref<FormInstance>()
+const createForm = reactive({
+  companyName: '',
+  licenseNo: '',
+  contactName: '',
+  contactPhone: '',
+  venueName: '',
+  venueAddress: '',
+  venueCourtCount: 1,
+  venueOpenTime: '',
+  venueCloseTime: '',
+})
+
+const createRules = {
+  companyName: [{ required: true, message: '请输入公司名称' }],
+  licenseNo: [{ required: true, message: '请输入营业执照号' }],
+  contactName: [{ required: true, message: '请输入联系人姓名' }],
+  contactPhone: [
+    { required: true, message: '请输入手机号' },
+    { pattern: /^1\d{10}$/, message: '手机号格式不正确' },
+  ],
+  venueName: [{ required: true, message: '请输入场馆名称' }],
+  venueAddress: [{ required: true, message: '请输入场馆地址' }],
+}
+
+function openCreateModal() {
+  Object.assign(createForm, {
+    companyName: '',
+    licenseNo: '',
+    contactName: '',
+    contactPhone: '',
+    venueName: '',
+    venueAddress: '',
+    venueCourtCount: 1,
+    venueOpenTime: '',
+    venueCloseTime: '',
+  })
+  createVisible.value = true
+}
+
+async function confirmCreate() {
+  try {
+    await createFormRef.value?.validate()
+  } catch {
+    return
+  }
+  createSaving.value = true
+  try {
+    await createOperator({
+      companyName: createForm.companyName.trim(),
+      licenseNo: createForm.licenseNo.trim(),
+      contactName: createForm.contactName.trim(),
+      contactPhone: createForm.contactPhone.trim(),
+      venueName: createForm.venueName.trim(),
+      venueAddress: createForm.venueAddress.trim(),
+      venueCourtCount: createForm.venueCourtCount || 1,
+      venueOpenTime: createForm.venueOpenTime || '09:00',
+      venueCloseTime: createForm.venueCloseTime || '22:00',
+    })
+    message.success('俱乐部创建成功，经营者账号已开通（登录账号=手机号，初始密码123456）')
+    createVisible.value = false
+    loadStats()
+    loadApplications()
+  } catch {
+    // 错误已由拦截器提示
+  } finally {
+    createSaving.value = false
+  }
 }
 
 // ==================== 账号列表 ====================
