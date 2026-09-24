@@ -645,6 +645,9 @@
           <span class="sub-text"> · 办卡 {{ card.joinDate }}</span>
           <span v-if="card.operatorName" class="sub-text"> · {{ card.operatorName }}</span>
         </div>
+        <div v-if="card.cardType === 'times_card'" class="card-item-restrict">
+          {{ timesCardRestrictText(card) }}
+        </div>
         <div class="card-item-actions">
           <a @click="openCardRecharge(card)">充值</a>
           <a @click="openCardAdjust(card)">调整</a>
@@ -801,6 +804,27 @@ function cardTypeColor(t: CardType): string {
     monthly_card: 'purple',
   }
   return map[t] || 'default'
+}
+
+/** 次卡可用范围文案（限定时段 + 价格上限） */
+function timesCardRestrictText(card: MemberCard): string {
+  const parts: string[] = []
+  if (card.validWeekdays) {
+    const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    const days = card.validWeekdays
+      .split(',')
+      .map(Number)
+      .filter((n) => n >= 1 && n <= 7)
+      .sort((a, b) => a - b)
+    if (days.length) parts.push(days.map((d) => names[d - 1]).join('、'))
+  }
+  if (card.timeStart || card.timeEnd) {
+    parts.push(`${card.timeStart || '00:00'}~${card.timeEnd || '24:00'}`)
+  }
+  if (card.priceLimit != null && card.priceLimit > 0) {
+    parts.push(`单价≤¥${card.priceLimit}/小时`)
+  }
+  return parts.length ? `可用范围：${parts.join(' · ')}` : '可用范围：不限时段与价格'
 }
 
 const cardStatusOptions = [
@@ -1770,7 +1794,17 @@ loadStats()
   .card-item-body {
     font-size: 14px;
     color: #333;
+    margin-bottom: 8px;
+  }
+  .card-item-restrict {
     margin-bottom: 10px;
+    padding: 6px 8px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #166534;
+    line-height: 1.5;
   }
   .card-item-actions {
     border-top: 1px dashed #eef2f7;

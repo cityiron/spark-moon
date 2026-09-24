@@ -46,6 +46,10 @@ function normalizePlan(raw: any): VipPlan {
     durationMonths: raw.durationMonths ?? Math.ceil((raw.durationDays || 0) / 30),
     durationDays: raw.durationDays,
     productType: raw.productType ?? 'SUBSCRIBE',
+    validWeekdays: raw.validWeekdays,
+    timeStart: raw.timeStart,
+    timeEnd: raw.timeEnd,
+    priceLimit: raw.priceLimit,
     status: (raw.status === 1 || raw.status === 'active') ? 'active' : 'inactive',
     planType: raw.planType ?? 'venue',
   } as VipPlan
@@ -59,6 +63,10 @@ function toSaveRequest(data: Partial<VipPlan>): Record<string, any> {
     productType: data.productType ?? 'SUBSCRIBE',
     price: data.price ?? 0,
     durationMonths: data.durationMonths ?? 12,
+    validWeekdays: data.validWeekdays || undefined,
+    timeStart: data.timeStart || undefined,
+    timeEnd: data.timeEnd || undefined,
+    priceLimit: data.priceLimit ?? undefined,
     description: data.description,
     status: data.status === 'active' ? 1 : 0,
   }
@@ -161,6 +169,30 @@ export function saveRechargeGifts(gifts: RechargeGift[]) {
     url: '/vip/recharge-gifts',
     method: 'put',
     data: gifts,
+  })
+}
+
+/** 俱乐部会员卡统计配置(储值等级折扣的累计充值统计窗口/月) */
+export interface StatsConfig {
+  operatorId?: IdParam
+  /** 统计窗口(月): 档位按近 N 个月累计充值匹配 */
+  statsWindowMonths: number
+}
+
+/** 读取俱乐部会员卡统计配置 */
+export function getStatsConfig() {
+  return request<StatsConfig>({
+    url: '/vip/stats-config',
+    method: 'get',
+  })
+}
+
+/** 保存俱乐部会员卡统计配置(统计窗口/月) */
+export function saveStatsConfig(statsWindowMonths: number) {
+  return request<StatsConfig>({
+    url: '/vip/stats-config',
+    method: 'put',
+    data: { statsWindowMonths },
   })
 }
 

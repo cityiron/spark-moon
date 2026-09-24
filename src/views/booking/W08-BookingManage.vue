@@ -42,6 +42,10 @@
               <lock-outlined />
               场地锁定
             </a-button>
+            <a-button @click="openLockList()">
+              <unordered-list-outlined />
+              锁定记录
+            </a-button>
           </a-space>
         </div>
       </div>
@@ -220,10 +224,12 @@
             <a-radio value="activity">活动占用（已预订）</a-radio>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="场地" name="courtId">
+        <a-form-item :label="editingLockId != null ? '场地' : '场地(可多选批量锁定)'" name="courtIds">
           <a-select
-            v-model:value="lockForm.courtId"
+            v-model:value="lockForm.courtIds"
+            mode="multiple"
             :options="courtOptions"
+            :max-tag-count="3"
             placeholder="请选择场地"
           />
         </a-form-item>
@@ -381,6 +387,58 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 锁定记录 Drawer(集中管理: 查看/编辑/释放) -->
+    <a-drawer
+      v-model:open="lockListOpen"
+      title="锁定记录"
+      width="820"
+      :destroy-on-close="false"
+    >
+      <a-table
+        :data-source="lockRecords"
+        :columns="lockColumns"
+        :loading="lockListLoading"
+        row-key="id"
+        :pagination="false"
+        size="small"
+        :scroll="{ x: 720 }"
+        :locale="{ emptyText: '暂无锁定记录' }"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'type'">
+            <a-tag :color="lockTypeColor(record.lockType)">
+              {{ lockTypeLabel(record.lockType) }}
+            </a-tag>
+          </template>
+          <template v-else-if="column.key === 'time'">
+            {{ record.startTime }} - {{ record.endTime }}
+          </template>
+          <template v-else-if="column.key === 'repeat'">
+            <a-tag v-if="record.repeatText" color="blue">{{ record.repeatText }}</a-tag>
+            <span v-else class="muted-text">单次</span>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space>
+              <a-tooltip :title="record.editable ? '' : '该培训占用由排课自动锁定，请到「排课管理」调整或取消对应排课'">
+                <a-button size="small" :disabled="!record.editable" @click="openEditLockFromList(record)">编辑</a-button>
+              </a-tooltip>
+              <a-popconfirm
+                title="确认释放该场地锁定? 释放后该时段恢复可预订"
+                ok-text="确认释放"
+                cancel-text="返回"
+                :disabled="!record.editable"
+                @confirm="handleReleaseFromList(record)"
+              >
+                <a-tooltip :title="record.editable ? '' : '该培训占用由排课自动锁定，请到「排课管理」取消对应排课来释放'">
+                  <a-button size="small" type="primary" danger :disabled="!record.editable">释放</a-button>
+                </a-tooltip>
+              </a-popconfirm>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </a-drawer>
   </div>
 </template>
 
@@ -393,11 +451,12 @@ import {
   ReloadOutlined,
   UserAddOutlined,
   LockOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getAllVenues } from '@/api/venue'
-import { getBookingGrid, proxyBooking, lockCourt, unlockCourt, getLockDetail, updateLock, adminCancelBooking, verifyBooking } from '@/api/booking'
-import type { Venue, Court, CourtGridRow, TimeSlot, BookingOrder, LockRepeatType } from '@/types/models'
+import { getBookingGrid, proxyBooking, lockCourt, unlockCourt, getLockDetail, updateLock, getVenueLocks, type CourtLockRecord, adminCancelBooking, verifyBooking } from '@/api/booking'
+import type { Venue, Court, CourtGridRow, TimeSlot, BookingOrder, LockRepeatType, CourtLock } from '@/types/models'
 
 // ===== 场馆选择 =====
 const venueOptions = ref<{ label: string; value: string | number }[]>([])
@@ -490,9 +549,9 @@ function onCellClick(row: CourtGridRow, slot: TimeSlot) {
     // 已预订 -> 显示订单详情
     currentOrder.value = slot.order
     orderModalOpen.value = true
-  } else if (slot.status === 'locked' || slot.status === 'training') {
+  } else if (slot.status === 'locked' || slot.status === 'training' || slot.status === 'activity') {
     if (slot.lockId) {
-      // 已锁定/培训 -> 显示锁定详情, 支持编辑/释放
+      // 已锁定/培训/活动 -> 显示锁定详情, 支持编辑/释放
       // 排课自动生成的培训占用(原因以 TRAINING_SESSION: 开头)不可在此编辑/释放
       const autoTraining = (slot.lockReason || '').startsWith('TRAINING_SESSION:')
       currentLock.value = {
@@ -508,7 +567,7 @@ function onCellClick(row: CourtGridRow, slot: TimeSlot) {
       lockModalOpen.value = true
     }
     else {
-      message.info(`该时段已${slot.status === 'training' ? '被培训占用' : '被锁定'}`)
+      message.info(`该时段已${slot.status === 'training' ? '被培训占用' : slot.status === 'activity' ? '被活动占用' : '被锁定'}`)
     }
   }
 }
@@ -763,8 +822,8 @@ function calcDuration(start: string, end: string): number {
 const lockDrawerOpen = ref(false)
 const lockFormRef = ref<FormInstance>()
 const lockForm = reactive({
-  type: 'lock' as 'lock' | 'training',
-  courtId: undefined as string | number | undefined,
+  type: 'lock' as 'lock' | 'training' | 'activity',
+  courtIds: [] as (string | number)[],
   venueId: undefined as string | number | undefined,
   date: dayjs().format('YYYY-MM-DD'),
   startTime: '',
@@ -784,34 +843,43 @@ const WEEK_OPTIONS = [
 ]
 const WEEK_MAP: Record<string, string> = Object.fromEntries(WEEK_OPTIONS.map(o => [o.value, o.label]))
 
-/** 当前所选场地的 RANGE 整段一口价时段列表(来自网格 rangeKey, 如 ["18:00-20:00"]) */
+/** 当前所选场地的 RANGE 整段一口价时段列表(来自网格 rangeKey, 如 ["18:00-20:00"]), 多场地合并去重 */
 const lockRangeHints = computed<string[]>(() => {
-  const row = gridRows.value.find((r) => r.court.id === lockForm.courtId)
-  if (!row) return []
   const ranges = new Set<string>()
-  row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
+  for (const cid of lockForm.courtIds) {
+    const row = gridRows.value.find((r) => r.court.id === cid)
+    if (!row) continue
+    row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
+  }
   return [...ranges]
 })
 
 /**
- * 锁定时段与 RANGE 整段一口价部分重叠(有交集且未完整覆盖)时返回冲突段文本(如 "18:00-20:00"),
- * 无冲突返回 null。HH:mm 字符串按字典序比较结果与时间顺序一致。
+ * 锁定时段与所选各场地 RANGE 整段一口价部分重叠(有交集且未完整覆盖)时返回冲突列表
+ * (如 ["场地1: 18:00-20:00"]), 无冲突返回空数组。HH:mm 字符串按字典序比较结果与时间顺序一致。
  */
-function findRangeOverlap(start: string, end: string): string | null {
-  const row = gridRows.value.find((r) => r.court.id === lockForm.courtId)
-  if (!row) return null
-  const ranges = new Set<string>()
-  row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
-  for (const rk of ranges) {
-    const [rs, re] = rk.split('-')
-    const overlap = start < re && end > rs
-    const fullCover = start <= rs && end >= re
-    if (overlap && !fullCover) return rk
+function findRangeOverlaps(start: string, end: string): string[] {
+  const conflicts: string[] = []
+  for (const cid of lockForm.courtIds) {
+    const row = gridRows.value.find((r) => r.court.id === cid)
+    if (!row) continue
+    const ranges = new Set<string>()
+    row.slots.forEach((s) => { if (s.rangeKey) ranges.add(s.rangeKey) })
+    for (const rk of ranges) {
+      const [rs, re] = rk.split('-')
+      const overlap = start < re && end > rs
+      const fullCover = start <= rs && end >= re
+      if (overlap && !fullCover) {
+        conflicts.push(`${row.court.name}: ${rk}`)
+      }
+    }
   }
-  return null
+  return conflicts
 }
 const lockRules = {
-  courtId: [{ required: true, message: '请选择场地', trigger: 'change' }],
+  courtIds: [
+    { required: true, type: 'array' as const, min: 1, message: '请至少选择一个场地', trigger: 'change' },
+  ],
   date: [{ required: true, message: '请选择日期', trigger: 'change' }],
   startTime: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   endTime: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
@@ -833,7 +901,7 @@ function openLockForm() {
   editingLockId.value = null
   Object.assign(lockForm, {
     type: 'lock',
-    courtId: undefined,
+    courtIds: [],
     venueId: selectedVenueId.value,
     date: selectedDate.value,
     startTime: '',
@@ -849,26 +917,32 @@ async function submitLock() {
   await lockFormRef.value?.validate()
   // 锁定时段不得与整段一口价部分重叠(前端即时提醒, 后端也会硬校验)
   if (lockForm.startTime && lockForm.endTime) {
-    const conflict = findRangeOverlap(lockForm.startTime, lockForm.endTime)
-    if (conflict) {
-      message.error(`锁定时段与整段一口价 ${conflict} 部分重叠，需整段锁定该时段或完全不锁该段`)
+    const conflicts = findRangeOverlaps(lockForm.startTime, lockForm.endTime)
+    if (conflicts.length > 0) {
+      message.error(`锁定时段与整段一口价部分重叠，需整段锁定该时段或完全不锁该段：${conflicts.join('、')}`)
       return
     }
   }
   submitting.value = true
   try {
-    const payload = {
-      ...lockForm,
+    const base = {
       venueId: selectedVenueId.value!,
-      courtId: lockForm.courtId!,
+      date: lockForm.date,
+      startTime: lockForm.startTime,
+      endTime: lockForm.endTime,
+      type: lockForm.type,
+      reason: lockForm.reason,
       repeatType: lockForm.repeatType,
       weekdays: lockForm.repeatType === 'weekly' ? [...lockForm.weekdays].sort().join(',') : undefined,
     }
     if (editingLockId.value != null) {
-      await updateLock(editingLockId.value, payload)
+      // 编辑单条: 传 courtId(单场地)
+      await updateLock(editingLockId.value, { ...base, courtId: lockForm.courtIds[0] })
       message.success('锁定已更新')
     } else {
-      await lockCourt(payload)
+      // 新建批量: 传 courtIds
+      await lockCourt({ ...base, courtIds: [...lockForm.courtIds] })
+      const count = lockForm.courtIds.length
       let repeatText = ''
       if (lockForm.repeatType === 'daily') {
         repeatText = '（每天重复）'
@@ -876,7 +950,7 @@ async function submitLock() {
         const days = [...lockForm.weekdays].sort().map(w => WEEK_MAP[w]).join('、')
         repeatText = `（每周${days}重复，从下一周起生效）`
       }
-      message.success((lockForm.type === 'training' ? '培训占用已设置' : '场地已锁定') + repeatText)
+      message.success(`${count > 1 ? `已批量锁定 ${count} 块场地` : lockForm.type === 'training' ? '培训占用已设置' : '场地已锁定'}${repeatText}`)
     }
     lockDrawerOpen.value = false
     editingLockId.value = null
@@ -906,21 +980,87 @@ const editingLockId = ref<string | number | null>(null)
 
 async function openEditLock() {
   if (!currentLock.value) return
-  const detail = await getLockDetail(currentLock.value.lockId)
-  editingLockId.value = detail.id ?? currentLock.value.lockId
+  try {
+    const detail = await getLockDetail(currentLock.value.lockId)
+    fillLockForm(detail, currentLock.value.lockId)
+    lockModalOpen.value = false
+    lockDrawerOpen.value = true
+  } catch {
+    message.error('加载锁定详情失败，请稍后重试')
+  }
+}
+
+/** 用锁定详情回填锁定表单(编辑预填); 时间统一截取 HH:mm, 避免后端返回 HH:mm:ss 导致前端字符串比较误判 */
+function fillLockForm(detail: CourtLock, fallbackId: string | number) {
+  editingLockId.value = detail.id ?? fallbackId
   Object.assign(lockForm, {
     type: detail.lockType === 'TRAINING' ? 'training' : detail.lockType === 'ACTIVITY' ? 'activity' : 'lock',
-    courtId: detail.courtId,
+    courtIds: detail.courtId != null ? [String(detail.courtId)] : [],
     venueId: detail.venueId,
     date: detail.date,
-    startTime: detail.startTime,
-    endTime: detail.endTime,
+    startTime: detail.startTime ? detail.startTime.slice(0, 5) : '',
+    endTime: detail.endTime ? detail.endTime.slice(0, 5) : '',
     reason: detail.reason || '',
     repeatType: detail.repeatType || 'once',
     weekdays: detail.weekdays ? detail.weekdays.split(',').filter(Boolean) : [],
   })
-  lockModalOpen.value = false
-  lockDrawerOpen.value = true
+}
+
+// ===== 锁定记录(集中管理) =====
+const lockListOpen = ref(false)
+const lockListLoading = ref(false)
+const lockRecords = ref<CourtLockRecord[]>([])
+const lockColumns = [
+  { title: '场地', dataIndex: 'courtName', key: 'court', width: 110 },
+  { title: '类型', dataIndex: 'lockType', key: 'type', width: 110 },
+  { title: '日期', dataIndex: 'date', key: 'date', width: 110 },
+  { title: '时段', key: 'time', width: 130 },
+  { title: '重复', key: 'repeat', width: 130 },
+  { title: '原因', dataIndex: 'reason', key: 'reason', ellipsis: true },
+  { title: '操作', key: 'action', width: 140, fixed: 'right' as const },
+]
+
+function lockTypeLabel(lockType: CourtLockRecord['lockType']): string {
+  return lockType === 'TRAINING' ? '培训占用' : lockType === 'ACTIVITY' ? '活动占用' : '场地锁定(维护)'
+}
+
+function lockTypeColor(lockType: CourtLockRecord['lockType']): string {
+  return lockType === 'TRAINING' ? 'purple' : lockType === 'ACTIVITY' ? 'blue' : 'orange'
+}
+
+async function openLockList() {
+  if (!selectedVenueId.value) return
+  lockListOpen.value = true
+  lockListLoading.value = true
+  try {
+    lockRecords.value = (await getVenueLocks(selectedVenueId.value)) || []
+  } catch {
+    lockRecords.value = []
+  } finally {
+    lockListLoading.value = false
+  }
+}
+
+async function openEditLockFromList(record: CourtLockRecord) {
+  try {
+    const detail = await getLockDetail(record.id)
+    fillLockForm(detail, record.id)
+    lockDrawerOpen.value = true
+  } catch {
+    message.error('加载锁定详情失败，请稍后重试')
+  }
+}
+
+async function handleReleaseFromList(record: CourtLockRecord) {
+  await unlockCourt(record.id)
+  message.success('场地锁定已释放，该时段恢复可预订')
+  lockListLoading.value = true
+  try {
+    lockRecords.value = (await getVenueLocks(selectedVenueId.value!)) || []
+  } finally {
+    lockListLoading.value = false
+  }
+  loadGrid()
 }
 
 async function handleReleaseLock() {
@@ -1001,6 +1141,10 @@ onMounted(() => {
 
 .empty-tip {
   padding: 60px 0;
+}
+
+.muted-text {
+  color: #999;
 }
 
 .grid-wrap {

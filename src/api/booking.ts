@@ -66,6 +66,39 @@ export function updateLock(id: IdParam, data: CourtLock) {
   })
 }
 
+/** 球馆锁定记录列表项(对应后端 CourtLockVO) */
+export interface CourtLockRecord {
+  id: IdParam
+  courtId: IdParam
+  courtName?: string
+  venueId: IdParam
+  /** 锁定日期 YYYY-MM-DD */
+  date: string
+  /** HH:mm */
+  startTime: string
+  /** HH:mm */
+  endTime: string
+  /** MAINTENANCE 场地维护 / TRAINING 培训占用 / ACTIVITY 活动占用 */
+  lockType: 'MAINTENANCE' | 'TRAINING' | 'ACTIVITY'
+  reason?: string
+  /** once 单次 / daily 每天 / weekly 每周 */
+  repeatType?: 'once' | 'daily' | 'weekly'
+  weekdays?: string
+  /** 重复文本(如 "每周二、四重复"), 单次为 null */
+  repeatText?: string
+  /** 是否可编辑/释放(排课自动生成的培训锁定为 false) */
+  editable: boolean
+}
+
+/** 球馆锁定记录列表(集中管理: 编辑/释放) */
+export function getVenueLocks(venueId: IdParam) {
+  return request<CourtLockRecord[]>({
+    url: '/booking/locks',
+    method: 'get',
+    params: { venueId },
+  })
+}
+
 /** 取消预订 */
 export function cancelBooking(id: IdParam) {
   return request<void>({

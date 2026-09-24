@@ -51,6 +51,9 @@
                 <template v-if="plan.productType === 'TIMES_CARD'"> · 按次使用</template>
                 <template v-else-if="plan.productType === 'MONTHLY_CARD'"> · 买断</template>
               </div>
+              <div v-if="plan.productType === 'TIMES_CARD'" class="plan-restrict">
+                {{ timesRestrictText(plan) }}
+              </div>
               <div class="plan-switch">
                 <span class="switch-label">上架状态</span>
                 <a-switch
@@ -99,6 +102,26 @@
           <a-button style="margin-right: 8px" @click="loadTiers">刷新</a-button>
           <a-button type="primary" @click="addTier">新增档位</a-button>
         </div>
+      </div>
+
+      <!-- 等级统计窗口配置: 档位按近 N 个月累计充值匹配 -->
+      <div class="stats-window-row">
+        <span class="window-label">等级统计窗口</span>
+        <a-input-number
+          v-model:value="statsWindowMonths"
+          :min="0"
+          :max="120"
+          :step="1"
+          style="width: 120px"
+          placeholder="12"
+        />
+        <span class="window-hint">个月（按近 N 个月累计充值匹配档位，0=不限）</span>
+        <a-button
+          type="primary"
+          size="small"
+          :loading="statsConfigSaving"
+          @click="submitStatsConfig"
+        >保存统计窗口</a-button>
       </div>
 
       <a-spin :spinning="tierLoading">
@@ -324,6 +347,51 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <!-- 次卡双条件: 限定时段(星期+时间) + 价格上限 -->
+        <template v-if="planForm.productType === 'TIMES_CARD'">
+          <a-form-item label="可用星期（不选=不限）">
+            <a-checkbox-group
+              v-model:value="planForm.validWeekdays"
+              :options="weekdayOptions"
+            />
+            <div class="form-tip">次卡仅限所选星期使用；不选则不限制星期</div>
+          </a-form-item>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="可用开始时间（不填=不限）">
+                <a-time-picker
+                  v-model:value="planForm.timeStart"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  placeholder="如 09:00"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="可用结束时间（不填=不限）">
+                <a-time-picker
+                  v-model:value="planForm.timeEnd"
+                  format="HH:mm"
+                  value-format="HH:mm"
+                  placeholder="如 18:00"
+                  style="width: 100%"
+                />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-form-item label="价格上限(元/小时)（不填=不限）">
+            <a-input-number
+              v-model:value="planForm.priceLimit"
+              :min="0"
+              :step="10"
+              :precision="2"
+              style="width: 100%"
+              placeholder="如 100"
+            />
+            <div class="form-tip">场次小时单价高于该值则该场次不可用；不填则不限制价格</div>
+          </a-form-item>
+        </template>
         <a-alert
           v-if="planForm.productType === 'TIMES_CARD'"
           type="info"
@@ -485,6 +553,8 @@ import {
   saveRechargeTiers,
   getRechargeGifts,
   saveRechargeGifts,
+  getStatsConfig,
+  saveStatsConfig,
   getVipMemberships,
   getAllVenues,
   type VipMembershipQuery,
@@ -511,6 +581,56 @@ function formatFen(fen: number | undefined): string {
 function discountLabel(rate: number | undefined | null): string {
   if (rate === undefined || rate === null) return '-'
   return `${(rate * 10).toFixed(1)} 折`
+}
+
+// ===== 次卡限定时段工具 =====
+const weekdayOptions = [
+  { label: '周一', value: '1' },
+  { label: '周二', value: '2' },
+  { label: '周三', value: '3' },
+  { label: '周四', value: '4' },
+  { label: '周五', value: '5' },
+  { label: '周六', value: '6' },
+  { label: '周日', value: '7' },
+]
+const WEEKDAY_NAMES = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
+/** 星期集合(如 "1,2,3,4")转中文(周一~周四) */
+function weekdayText(weekdays?: string): string {
+  if (!weekdays) return ''
+  const parts = weekdays
+    .split(',')
+    .map((d) => Number(d))
+    .filter((n) => n >= 1 && n <= 7)
+    .sort((a, b) => a - b)
+  if (!parts.length) return ''
+  // 连续区间合并为 "周一~周四"
+  const segs: string[] = []
+  let start = parts[0]
+  let prev = parts[0]
+  for (let i = 1; i <= parts.length; i++) {
+    const cur = parts[i]
+    if (cur === prev + 1) {
+      prev = cur
+      continue
+    }
+    segs.push(start === prev ? WEEKDAY_NAMES[start] : `${WEEKDAY_NAMES[start]}~${WEEKDAY_NAMES[prev]}`)
+    start = cur
+    prev = cur
+  }
+  return segs.join('、')
+}
+/** 次卡可用范围文案: 限定时段 + 价格上限 */
+function timesRestrictText(plan: VipPlan): string {
+  const parts: string[] = []
+  const wd = weekdayText(plan.validWeekdays)
+  if (wd) parts.push(wd)
+  if (plan.timeStart || plan.timeEnd) {
+    parts.push(`${plan.timeStart || '00:00'}~${plan.timeEnd || '24:00'}`)
+  }
+  if (plan.priceLimit != null && plan.priceLimit > 0) {
+    parts.push(`单价≤¥${plan.priceLimit}/小时`)
+  }
+  return parts.length ? `可用范围：${parts.join(' · ')}` : '可用范围：不限时段与价格'
 }
 
 let tierRowKey = 1
@@ -622,12 +742,20 @@ const planForm = reactive<{
   durationMonths: number
   productType: 'SUBSCRIBE' | 'TIMES_CARD' | 'MONTHLY_CARD'
   status: VipPlanStatus
+  validWeekdays: string[]
+  timeStart: string   // HH:mm
+  timeEnd: string     // HH:mm
+  priceLimit: number | undefined
 }>({
   name: '',
   price: 0,
   durationMonths: 1,
   productType: 'SUBSCRIBE',
   status: 'active',
+  validWeekdays: [],
+  timeStart: '',
+  timeEnd: '',
+  priceLimit: undefined,
 })
 const productTypeOptions = [
   { label: '订阅卡（按月付费，长期有效）', value: 'SUBSCRIBE' },
@@ -643,7 +771,17 @@ const planRules = {
 
 function openCreatePlan() {
   isEdit.value = false
-  Object.assign(planForm, { name: '', price: 0, durationMonths: 1, productType: 'SUBSCRIBE', status: 'active' })
+  Object.assign(planForm, {
+    name: '',
+    price: 0,
+    durationMonths: 1,
+    productType: 'SUBSCRIBE',
+    status: 'active',
+    validWeekdays: [],
+    timeStart: '',
+    timeEnd: '',
+    priceLimit: undefined,
+  })
   formModalOpen.value = true
 }
 function openEditPlan(plan: VipPlan) {
@@ -655,6 +793,10 @@ function openEditPlan(plan: VipPlan) {
     durationMonths: plan.durationMonths,
     productType: plan.productType ?? 'SUBSCRIBE',
     status: plan.status,
+    validWeekdays: (plan.validWeekdays || '').split(',').filter(Boolean),
+    timeStart: plan.timeStart || '',
+    timeEnd: plan.timeEnd || '',
+    priceLimit: plan.priceLimit ?? undefined,
   })
   formModalOpen.value = true
 }
@@ -669,6 +811,13 @@ async function submitPlan() {
       price: Math.round(planForm.price * 100),   // 元转分
       durationMonths: planForm.durationMonths,
       status: planForm.status,
+      // 次卡限定时段 + 价格上限(仅 TIMES_CARD 生效, 其余类型后端忽略)
+      validWeekdays: planForm.productType === 'TIMES_CARD' && planForm.validWeekdays.length
+        ? planForm.validWeekdays.join(',')
+        : undefined,
+      timeStart: planForm.productType === 'TIMES_CARD' ? (planForm.timeStart || undefined) : undefined,
+      timeEnd: planForm.productType === 'TIMES_CARD' ? (planForm.timeEnd || undefined) : undefined,
+      priceLimit: planForm.productType === 'TIMES_CARD' ? (planForm.priceLimit ?? undefined) : undefined,
     }
     if (isEdit.value) {
       await updateVipPlan(editingPlanId.value, payload)
@@ -995,12 +1144,41 @@ async function submitGifts() {
   }
 }
 
+// ===== 等级统计窗口配置 =====
+const statsWindowMonths = ref<number | undefined>(12)
+const statsConfigSaving = ref(false)
+
+async function loadStatsConfig() {
+  try {
+    const cfg = await getStatsConfig()
+    statsWindowMonths.value = cfg?.statsWindowMonths ?? 12
+  } catch {
+    statsWindowMonths.value = 12
+  }
+}
+
+async function submitStatsConfig() {
+  const months = statsWindowMonths.value
+  if (months == null || months < 0 || months > 120) {
+    message.warning('统计窗口需在 0~120 个月之间')
+    return
+  }
+  statsConfigSaving.value = true
+  try {
+    await saveStatsConfig(months)
+    message.success('统计窗口已保存')
+  } finally {
+    statsConfigSaving.value = false
+  }
+}
+
 // ===== 初始化加载 =====
 onMounted(() => {
   loadPlanList()
   loadMembershipList()
   loadTiers()
   loadGifts()
+  loadStatsConfig()
 })
 </script>
 
@@ -1073,6 +1251,24 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+// ===== 等级统计窗口 =====
+.stats-window-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  .window-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+  }
+  .window-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-right: 8px;
+  }
+}
+
 // ===== 会员卡卡片 =====
 .plan-card {
   :deep(.ant-card-body) {
@@ -1104,6 +1300,16 @@ onMounted(() => {
     font-size: 13px;
     color: #64748b;
     margin-top: 6px;
+  }
+  .plan-restrict {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #166534;
+    line-height: 1.5;
   }
   .plan-switch {
     display: flex;

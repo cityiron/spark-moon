@@ -217,7 +217,10 @@ export type LockRepeatType = 'once' | 'daily' | 'weekly'
 export interface CourtLock {
   /** ID 为雪花大整数，后端序列化为字符串，故允许 string | number */
   id?: string | number
-  courtId: string | number
+  /** 单场地锁定(编辑单条/兼容用) */
+  courtId?: string | number
+  /** 批量锁定的场地ID列表(新建时优先; 为空则回退到 courtId) */
+  courtIds?: (string | number)[]
   venueId: string | number
   /** 锁定日期 YYYY-MM-DD */
   date: string
@@ -302,6 +305,14 @@ export interface MemberCard {
   operatorId?: string | number
   /** 归属俱乐部名称 */
   operatorName?: string
+  /** 次卡限定时段-星期(1-7, 逗号分隔), 空=不限 */
+  validWeekdays?: string
+  /** 次卡限定时段-开始时间 HH:mm, 空=不限 */
+  timeStart?: string
+  /** 次卡限定时段-结束时间 HH:mm, 空=不限 */
+  timeEnd?: string
+  /** 次卡价格上限(元/小时), 空=不限 */
+  priceLimit?: number
 }
 
 /** 会员 */
@@ -495,6 +506,14 @@ export interface VipPlan {
   productType?: 'SUBSCRIBE' | 'TIMES_CARD' | 'MONTHLY_CARD'
   /** 时长(天) */
   durationDays?: number
+  /** 次卡限定时段-星期(1-7, 逗号分隔, 如 "1,2,3,4"=周一~四), 空=不限 */
+  validWeekdays?: string
+  /** 次卡限定时段-开始时间 HH:mm, 空=不限 */
+  timeStart?: string
+  /** 次卡限定时段-结束时间 HH:mm, 空=不限 */
+  timeEnd?: string
+  /** 次卡价格上限(元/小时), 空=不限 */
+  priceLimit?: number
   status: VipPlanStatus
   /** 卡种描述 */
   description?: string
