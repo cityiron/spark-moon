@@ -22,6 +22,8 @@ export interface VipPlanQuery extends PageQuery {
   status?: VipPlanStatus
   /** 卡类型: platform 平台卡 / venue 球馆卡 */
   planType?: 'platform' | 'venue'
+  /** 归属经营者过滤(超管按俱乐部下拉筛选; 经营者角色忽略) */
+  operatorId?: IdParam
 }
 
 /** 已购 VIP 权益会员查询参数 */
@@ -69,6 +71,8 @@ function toSaveRequest(data: Partial<VipPlan>): Record<string, any> {
     priceLimit: data.priceLimit ?? undefined,
     description: data.description,
     status: data.status === 'active' ? 1 : 0,
+    // 归属经营者(仅超管新建球馆卡时指定)
+    operatorId: data.operatorId,
   }
 }
 
@@ -137,11 +141,12 @@ export function saveVipPlanBenefits(planId: IdParam, benefits: VipBenefit[]) {
   })
 }
 
-/** 储值等级档位列表 */
-export function getRechargeTiers() {
+/** 储值等级档位列表（平台角色可传 operatorId 过滤指定俱乐部） */
+export function getRechargeTiers(operatorId?: string | number) {
   return request<RechargeTier[]>({
     url: '/vip/recharge-tiers',
     method: 'get',
+    params: operatorId != null ? { operatorId } : undefined,
   })
 }
 

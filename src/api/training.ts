@@ -20,11 +20,15 @@ export interface CourseQuery extends PageQuery {
   keyword?: string
   courseType?: CourseType
   status?: CourseStatus
+  /** 归属经营者过滤(超管按俱乐部下拉筛选; 经营者角色忽略) */
+  operatorId?: IdParam
 }
 
 /** 教练查询参数 */
 export interface CoachQuery extends PageQuery {
   keyword?: string
+  /** 归属经营者过滤(超管按俱乐部下拉筛选; 经营者角色忽略) */
+  operatorId?: IdParam
 }
 
 /** 培训课程统计 */

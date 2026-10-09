@@ -21,6 +21,22 @@
     </div>
 
     <div class="page-card">
+      <!-- 俱乐部筛选(超管): 课程/教练两个 Tab 共用 -->
+      <div v-if="isSuperAdmin" class="table-toolbar" style="padding-bottom: 4px">
+        <div class="table-toolbar-left">
+          <span class="filter-label">所属俱乐部</span>
+          <a-select
+            v-model:value="filterOperatorId"
+            placeholder="选择俱乐部"
+            style="width: 220px"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="operatorOptions"
+            @change="reloadAll"
+          />
+        </div>
+      </div>
       <a-tabs v-model:activeKey="activeTab">
         <!-- ========== Tab 1: 课程管理 ========== -->
         <a-tab-pane key="course" tab="课程管理">
@@ -413,6 +429,8 @@ import {
   type CourseQuery,
 } from '@/api/training'
 import { getAllVenues } from '@/api/venue'
+import { getOperatorList } from '@/api/operator'
+import { useAuthStore } from '@/stores/auth'
 import { useTable } from '@/composables/useTable'
 import type { PageQuery } from '@/types/api'
 import type {
@@ -423,6 +441,7 @@ import type {
   CourseType,
   CourseStatus,
   Venue,
+  OperatorApplication,
 } from '@/types/models'
 
 // ===== 工具 =====
@@ -470,11 +489,47 @@ async function loadStats() {
 async function loadActiveCourseCount() {
   try {
     // 以 status=active 过滤课程列表, 取 total 作为在架课程数
-    const res = await getCourseList({ status: 'active', page: 1, size: 1 })
+    const res = await getCourseList({
+      status: 'active',
+      page: 1,
+      size: 1,
+      operatorId: isSuperAdmin.value ? filterOperatorId.value : undefined,
+    })
     activeCourseCount.value = res.total || 0
   } catch {
     activeCourseCount.value = 0
   }
+}
+
+// ===== 俱乐部筛选(超管): 课程/教练两个 Tab 共用 =====
+const authStore = useAuthStore()
+/** 是否平台超管(超管可跨俱乐部查看/筛选) */
+const isSuperAdmin = computed(() => authStore.roles.includes('super_admin'))
+/** 当前筛选的俱乐部(经营者主体) */
+const filterOperatorId = ref<string | number | undefined>(undefined)
+/** 经营者(俱乐部)下拉选项: 仅超管加载 */
+const operatorOptions = ref<{ label: string, value: string | number }[]>([])
+
+/** 加载已通过的经营者列表(俱乐部下拉) */
+async function loadOperators() {
+  try {
+    const res = await getOperatorList({ page: 1, size: 999, status: 'approved' })
+    operatorOptions.value = (res.list || []).map((o: OperatorApplication) => ({
+      label: o.companyName,
+      value: o.id,
+    }))
+  } catch {
+    operatorOptions.value = []
+  }
+}
+
+/** 切换筛选俱乐部时, 课程/教练/统计卡一起重载 */
+function reloadAll() {
+  courseQueryParams.operatorId = isSuperAdmin.value ? filterOperatorId.value : undefined
+  refreshCourseList()
+  loadActiveCourseCount()
+  loadCoachList()
+  loadStats()
 }
 
 // ===== Tab =====
@@ -522,6 +577,9 @@ function handleCourseReset() {
   searchCourseType.value = undefined
   searchStatus.value = undefined
   resetCourseQuery()
+  // reset 会清空 operatorId, 补回当前筛选俱乐部
+  courseQueryParams.operatorId = isSuperAdmin.value ? filterOperatorId.value : undefined
+  refreshCourseList()
 }
 
 /** 课程消课进度百分比 */
@@ -542,7 +600,10 @@ const coachOptions = computed(() =>
 async function loadCoachList() {
   coachLoading.value = true
   try {
-    const res = await getCoachList({ keyword: coachSearchKeyword.value || undefined })
+    const res = await getCoachList({
+      keyword: coachSearchKeyword.value || undefined,
+      operatorId: isSuperAdmin.value ? filterOperatorId.value : undefined,
+    })
     coachList.value = res || []
   } catch {
     coachList.value = []
@@ -864,10 +925,20 @@ async function handleDeleteCoach(record: Coach) {
 }
 
 // 初始化加载
-loadCourseList()
-loadStats()
-loadActiveCourseCount()
-loadCoachList()
+if (isSuperAdmin.value) {
+  // 超管: 先加载俱乐部列表, 默认选中第一个并按它过滤
+  loadOperators().then(() => {
+    if (filterOperatorId.value == null && operatorOptions.value.length) {
+      filterOperatorId.value = operatorOptions.value[0].value
+    }
+    reloadAll()
+  })
+} else {
+  loadCourseList()
+  loadStats()
+  loadActiveCourseCount()
+  loadCoachList()
+}
 loadVenueList()
 </script>
 
@@ -922,6 +993,11 @@ loadVenueList()
     gap: 8px;
     flex-wrap: wrap;
   }
+}
+.filter-label {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
 }
 .price-text {
   color: #059669;

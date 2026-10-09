@@ -515,6 +515,8 @@ export interface VipPlan {
   /** 次卡价格上限(元/小时), 空=不限 */
   priceLimit?: number
   status: VipPlanStatus
+  /** 归属经营者(俱乐部卡所属; 超管筛选/新建指定) */
+  operatorId?: string | number
   /** 卡种描述 */
   description?: string
   /** 各球馆折扣配置 (折扣率 0.1-1.0, 未配置视为不享受折扣) */

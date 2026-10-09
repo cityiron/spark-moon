@@ -21,6 +21,17 @@
       <div class="table-toolbar">
         <div class="table-toolbar-left">
           <span class="section-title">俱乐部会员卡</span>
+          <a-select
+            v-if="isSuperAdmin"
+            v-model:value="filterOperatorId"
+            placeholder="选择俱乐部"
+            style="width: 220px"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            :options="operatorOptions"
+            @change="reloadAll"
+          />
         </div>
         <a-button type="primary" @click="openCreatePlan">
           <plus-outlined />
@@ -36,6 +47,7 @@
                 <div class="plan-name">
                   {{ plan.name }}
                   <a-tag color="blue" style="margin-left: 6px">俱乐部卡</a-tag>
+                  <a-tag v-if="plan.operatorId" color="cyan">{{ operatorNameMap[String(plan.operatorId)] || '俱乐部' }}</a-tag>
                   <a-tag v-if="plan.productType === 'TIMES_CARD'" color="gold">次卡</a-tag>
                   <a-tag v-else-if="plan.productType === 'MONTHLY_CARD'" color="purple">月卡</a-tag>
                   <a-tag v-else color="green">订阅</a-tag>
@@ -567,8 +579,11 @@ import type {
   RechargeTier,
   RechargeGift,
   Venue,
+  OperatorApplication,
 } from '@/types/models'
 import VipRefundModal from '@/components/VipRefundModal.vue'
+import { getOperatorList } from '@/api/operator'
+import { useAuthStore } from '@/stores/auth'
 
 // ===== 工具 =====
 /** 分转元, 保留两位小数 */
@@ -700,10 +715,45 @@ function openRefund(record: VipMembership) {
 const planLoading = ref(false)
 const planList = ref<VipPlan[]>([])
 
+// ===== 俱乐部筛选(超管) =====
+const authStore = useAuthStore()
+/** 是否平台超管(超管可跨俱乐部查看/筛选) */
+const isSuperAdmin = computed(() => authStore.roles.includes('super_admin'))
+/** 当前筛选的俱乐部(经营者主体) */
+const filterOperatorId = ref<string | number | undefined>(undefined)
+/** 经营者(俱乐部)下拉选项: 仅超管加载 */
+const operatorOptions = ref<{ label: string, value: string | number }[]>([])
+/** operatorId → 俱乐部名映射(卡片归属标注) */
+const operatorNameMap = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {}
+  for (const opt of operatorOptions.value) {
+    map[String(opt.value)] = opt.label
+  }
+  return map
+})
+
+/** 加载已通过的经营者列表(俱乐部下拉) */
+async function loadOperators() {
+  try {
+    const res = await getOperatorList({ page: 1, size: 999, status: 'approved' })
+    operatorOptions.value = (res.list || []).map((o: OperatorApplication) => ({
+      label: o.companyName,
+      value: o.id,
+    }))
+  } catch {
+    operatorOptions.value = []
+  }
+}
+
 async function loadPlanList() {
   planLoading.value = true
   try {
-    const res = await getVipPlanList({ page: 1, size: 100, planType: 'venue' })
+    const res = await getVipPlanList({
+      page: 1,
+      size: 100,
+      planType: 'venue',
+      operatorId: isSuperAdmin.value ? filterOperatorId.value : undefined,
+    })
     planList.value = res.list || []
   } catch {
     planList.value = []
@@ -746,6 +796,7 @@ const planForm = reactive<{
   timeStart: string   // HH:mm
   timeEnd: string     // HH:mm
   priceLimit: number | undefined
+  operatorId: string | number | undefined  // 归属经营者(超管新建时指定)
 }>({
   name: '',
   price: 0,
@@ -756,6 +807,7 @@ const planForm = reactive<{
   timeStart: '',
   timeEnd: '',
   priceLimit: undefined,
+  operatorId: undefined,
 })
 const productTypeOptions = [
   { label: '订阅卡（按月付费，长期有效）', value: 'SUBSCRIBE' },
@@ -770,6 +822,11 @@ const planRules = {
 }
 
 function openCreatePlan() {
+  // 超管新建球馆卡必须先选俱乐部(否则卡无归属, 会混入全部列表)
+  if (isSuperAdmin.value && filterOperatorId.value == null) {
+    message.warning('请先在上方选择要新建会员卡的俱乐部')
+    return
+  }
   isEdit.value = false
   Object.assign(planForm, {
     name: '',
@@ -781,6 +838,8 @@ function openCreatePlan() {
     timeStart: '',
     timeEnd: '',
     priceLimit: undefined,
+    // 超管新建球馆卡归属当前筛选的俱乐部
+    operatorId: isSuperAdmin.value ? filterOperatorId.value : undefined,
   })
   formModalOpen.value = true
 }
@@ -818,6 +877,8 @@ async function submitPlan() {
       timeStart: planForm.productType === 'TIMES_CARD' ? (planForm.timeStart || undefined) : undefined,
       timeEnd: planForm.productType === 'TIMES_CARD' ? (planForm.timeEnd || undefined) : undefined,
       priceLimit: planForm.productType === 'TIMES_CARD' ? (planForm.priceLimit ?? undefined) : undefined,
+      // 归属经营者(仅新建时指定; 编辑不改变归属)
+      operatorId: isEdit.value ? undefined : planForm.operatorId,
     }
     if (isEdit.value) {
       await updateVipPlan(editingPlanId.value, payload)
@@ -1010,7 +1071,7 @@ function normalizeTier(t: RechargeTier): TierRow {
 async function loadTiers() {
   tierLoading.value = true
   try {
-    const list = await getRechargeTiers()
+    const list = await getRechargeTiers(isSuperAdmin.value ? filterOperatorId.value : undefined)
     tierList.value = (list || []).map(normalizeTier)
     // 无档位时填充默认三档(仅本地填充, 点击“保存储值档位”后生效)
     if (tierList.value.length === 0) {
@@ -1096,13 +1157,18 @@ function normalizeGift(g: RechargeGift): GiftRow {
 async function loadGifts() {
   giftLoading.value = true
   try {
-    const list = await getRechargeGifts()
+    const list = await getRechargeGifts(isSuperAdmin.value ? filterOperatorId.value : undefined)
     giftList.value = (list || []).map(normalizeGift)
   } catch {
     giftList.value = []
   } finally {
     giftLoading.value = false
   }
+}
+
+/** 切换筛选俱乐部时, 会员卡/储值档位/赠送档位三块一起重载 */
+function reloadAll() {
+  return Promise.allSettled([loadPlanList(), loadTiers(), loadGifts()])
 }
 
 function addGift() {
@@ -1174,10 +1240,20 @@ async function submitStatsConfig() {
 
 // ===== 初始化加载 =====
 onMounted(() => {
-  loadPlanList()
+  if (isSuperAdmin.value) {
+    // 超管: 先加载俱乐部列表, 默认选中第一个并按它过滤
+    loadOperators().then(() => {
+      if (filterOperatorId.value == null && operatorOptions.value.length) {
+        filterOperatorId.value = operatorOptions.value[0].value
+      }
+      reloadAll()
+    })
+  } else {
+    loadPlanList()
+    loadTiers()
+    loadGifts()
+  }
   loadMembershipList()
-  loadTiers()
-  loadGifts()
   loadStatsConfig()
 })
 </script>
